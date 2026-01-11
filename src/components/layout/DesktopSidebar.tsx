@@ -1,9 +1,9 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
-  Home, Library, BookOpen, Users, User, Settings, 
+import {
+  Home, Library, BookOpen, Users, User, Settings,
   ChevronLeft, ChevronRight, Shield, Upload, HelpCircle,
-  Bell, CreditCard
+  Bell, CreditCard, Download
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,8 @@ const mainNavItems = [
 
 const accountNavItems = [
   { to: '/profile', icon: User, label: 'Profile' },
-  { to: '/notifications-settings', icon: Bell, label: 'Notifications' },
+  { to: '/notifications', icon: Bell, label: 'Notifications' },
+  { to: '/offline', icon: Download, label: 'Offline' },
   { to: '/subscription', icon: CreditCard, label: 'Subscription' },
   { to: '/settings', icon: Settings, label: 'Settings' },
   { to: '/help', icon: HelpCircle, label: 'Help & FAQ' },

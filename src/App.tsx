@@ -28,7 +28,9 @@ import EditProfile from "./pages/EditProfile";
 import Subscription from "./pages/Subscription";
 import Payment from "./pages/Payment";
 import Settings from "./pages/Settings";
+import Notifications from "./pages/Notifications";
 import NotificationsSettings from "./pages/NotificationsSettings";
+import Offline from "./pages/Offline";
 import Help from "./pages/Help";
 import Search from "./pages/Search";
 import Upload from "./pages/Upload";
@@ -71,7 +73,9 @@ const App = () => (
                 <Route path="/subscription" element={<Subscription />} />
                 <Route path="/payment" element={<Payment />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/notifications" element={<Notifications />} />
                 <Route path="/notifications-settings" element={<NotificationsSettings />} />
+                <Route path="/offline" element={<Offline />} />
                 <Route path="/help" element={<Help />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/upload" element={<Upload />} />

@@ -200,9 +200,9 @@ export function TopBar({ onMenuClick }: TopBarProps) {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="justify-center text-primary cursor-pointer"
-              onClick={() => navigate('/notifications-settings')}
+              onClick={() => navigate('/notifications')}
             >
               View all notifications
             </DropdownMenuItem>

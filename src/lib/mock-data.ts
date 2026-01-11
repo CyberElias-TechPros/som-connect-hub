@@ -76,7 +76,39 @@ export interface ContentItem {
   isPremium: boolean;
   isDownloaded?: boolean;
   progress?: number;
+  isFavorited?: boolean;
 }
+
+export interface Playlist {
+  id: string;
+  name: string;
+  description: string;
+  thumbnail: string;
+  contentIds: string[];
+  createdDate: string;
+  isPublic: boolean;
+}
+
+export const playlists: Playlist[] = [
+  {
+    id: '1',
+    name: 'Faith Building Teachings',
+    description: 'Powerful messages to strengthen your faith and trust in God.',
+    thumbnail: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=340&fit=crop',
+    contentIds: ['1', '4', '5'],
+    createdDate: '2025-01-01',
+    isPublic: true,
+  },
+  {
+    id: '2',
+    name: 'Daily Inspiration',
+    description: 'Short podcasts and teachings for daily motivation.',
+    thumbnail: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600&h=340&fit=crop',
+    contentIds: ['10', '11'],
+    createdDate: '2025-01-05',
+    isPublic: false,
+  },
+];
 
 export const featuredContent: ContentItem[] = [
   {
@@ -92,6 +124,7 @@ export const featuredContent: ContentItem[] = [
     views: 15420,
     isPremium: false,
     progress: 45,
+    isFavorited: true,
   },
   {
     id: '2',
@@ -105,6 +138,7 @@ export const featuredContent: ContentItem[] = [
     tags: ['Health', 'Healing', 'Word'],
     views: 8930,
     isPremium: true,
+    isFavorited: false,
   },
   {
     id: '3',
@@ -118,6 +152,7 @@ export const featuredContent: ContentItem[] = [
     tags: ['Worship', 'Praise', 'Presence'],
     views: 12300,
     isPremium: false,
+    isFavorited: true,
   },
 ];
 
@@ -135,6 +170,9 @@ export const conferences: ContentItem[] = [
     tags: ['IPPC', 'Conference', 'Partners'],
     views: 45000,
     isPremium: true,
+    isDownloaded: true,
+    progress: 100,
+    isFavorited: false,
   },
   {
     id: '5',
@@ -148,6 +186,9 @@ export const conferences: ContentItem[] = [
     tags: ['Communion', 'Global', 'Unity'],
     views: 78500,
     isPremium: false,
+    isDownloaded: false,
+    progress: 75,
+    isFavorited: true,
   },
 ];
 
@@ -164,6 +205,9 @@ export const podcasts: ContentItem[] = [
     tags: ['Daily', 'Inspiration', 'Motivation'],
     views: 3200,
     isPremium: false,
+    isDownloaded: true,
+    progress: 100,
+    isFavorited: false,
   },
   {
     id: '11',
@@ -177,6 +221,9 @@ export const podcasts: ContentItem[] = [
     tags: ['Leadership', 'Ministry', 'Growth'],
     views: 2100,
     isPremium: true,
+    isDownloaded: false,
+    progress: 50,
+    isFavorited: true,
   },
 ];
 
@@ -193,6 +240,9 @@ export const originals: ContentItem[] = [
     tags: ['Behind the Scenes', 'Exclusive', 'Day in Life'],
     views: 25000,
     isPremium: true,
+    isDownloaded: true,
+    progress: 100,
+    isFavorited: true,
   },
   {
     id: '21',
@@ -206,6 +256,9 @@ export const originals: ContentItem[] = [
     tags: ['Game Show', 'Trivia', 'Fun'],
     views: 8900,
     isPremium: false,
+    isDownloaded: false,
+    progress: 0,
+    isFavorited: false,
   },
   {
     id: '22',
@@ -219,6 +272,9 @@ export const originals: ContentItem[] = [
     tags: ['Travel', 'Jerusalem', 'Holy Land'],
     views: 18500,
     isPremium: true,
+    isDownloaded: false,
+    progress: 25,
+    isFavorited: true,
   },
 ];
 
