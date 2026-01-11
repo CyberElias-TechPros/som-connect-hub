@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import somLogo from '@/images/som-logo.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -23,8 +24,8 @@ export default function Login() {
     <div className="min-h-screen flex flex-col justify-center p-6 bg-background">
       <div className="max-w-sm mx-auto w-full space-y-8">
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 rounded-xl bg-primary flex items-center justify-center mx-auto">
-            <span className="text-2xl font-bold text-primary-foreground">S</span>
+          <div className="w-20 h-20 rounded-xl flex items-center justify-center mx-auto">
+            <img src={somLogo} alt="SOM Connect Logo" className="w-16 h-16 object-contain" />
           </div>
           <h1 className="text-2xl font-bold">Welcome Back</h1>
           <p className="text-muted-foreground">Sign in to continue your journey</p>

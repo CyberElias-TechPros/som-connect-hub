@@ -36,7 +36,7 @@ export default function Index() {
       title: 'Q&A Sessions',
       description: 'Join live sessions',
       icon: MessageCircle,
-      href: '/qa-sessions',
+      href: '/qa',
       color: 'bg-green-500',
     },
     {

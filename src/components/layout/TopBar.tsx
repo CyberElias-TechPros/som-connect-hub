@@ -19,6 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { notifications } from '@/lib/mock-data';
 import { motion, AnimatePresence } from 'framer-motion';
+import somLogo from '@/images/som-logo.png';
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -83,9 +84,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
       {/* Logo (mobile only) */}
       {isMobile && (
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">S</span>
-          </div>
+          <img src={somLogo} alt="SOM Connect Logo" className="w-12 h-12 object-contain" />
           <span className="font-semibold text-foreground">SOM CONNECT</span>
         </Link>
       )}

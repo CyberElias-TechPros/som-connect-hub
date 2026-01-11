@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import somLogo from '@/images/som-logo.png';
 
 interface DesktopSidebarProps {
   collapsed: boolean;
@@ -21,6 +22,7 @@ const mainNavItems = [
   { to: '/library', icon: Library, label: 'Library' },
   { to: '/tools', icon: BookOpen, label: 'Daily Tools' },
   { to: '/community', icon: Users, label: 'Community' },
+  { to: '/qa', icon: Users, label: 'Q&A Sessions' },
 ];
 
 const accountNavItems = [
@@ -64,18 +66,14 @@ export function DesktopSidebar({ collapsed, onCollapsedChange }: DesktopSidebarP
               exit={{ opacity: 0 }}
               className="flex items-center gap-2"
             >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-sm">S</span>
-              </div>
+              <img src={somLogo} alt="SOM Connect Logo" className="w-12 h-12 object-contain" />
               <span className="font-semibold text-sidebar-foreground">SOM CONNECT</span>
             </motion.div>
           )}
         </AnimatePresence>
-        
+         
         {collapsed && (
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">S</span>
-          </div>
+          <img src={somLogo} alt="SOM Connect Logo" className="w-12 h-12 object-contain" />
         )}
       </div>
 

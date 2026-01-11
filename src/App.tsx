@@ -23,6 +23,7 @@ import RORPlan from "./pages/RORPlan";
 import Publications from "./pages/Publications";
 import Community from "./pages/Community";
 import QASessions from "./pages/QASessions";
+import QASession from "./pages/QASession";
 import Profile from "./pages/Profile";
 import EditProfile from "./pages/EditProfile";
 import Subscription from "./pages/Subscription";
@@ -68,6 +69,8 @@ const App = () => (
                 <Route path="/publications" element={<Publications />} />
                 <Route path="/community" element={<Community />} />
                 <Route path="/qa" element={<QASessions />} />
+                <Route path="/qa-sessions" element={<QASessions />} />
+                <Route path="/qa/:id" element={<QASession />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/profile/edit" element={<EditProfile />} />
                 <Route path="/subscription" element={<Subscription />} />

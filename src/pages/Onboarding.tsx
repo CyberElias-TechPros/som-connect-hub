@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ChevronRight, BookOpen, Users, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import somLogo from '@/images/som-logo.png';
 
 const slides = [
   { icon: BookOpen, title: 'Spiritual Growth', description: 'Access thousands of messages, teachings, and daily devotionals.' },
@@ -19,8 +20,12 @@ export default function Onboarding() {
       <div className="flex-1 flex items-center justify-center">
         <AnimatePresence mode="wait">
           <motion.div key={current} initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="text-center space-y-6 max-w-sm">
-            <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-              {React.createElement(slides[current].icon, { className: "w-12 h-12 text-primary" })}
+            <div className="w-28 h-28 rounded-full flex items-center justify-center mx-auto">
+              {current === 0 ? (
+                <img src={somLogo} alt="SOM Connect Logo" className="w-16 h-16 object-contain" />
+              ) : (
+                React.createElement(slides[current].icon, { className: "w-12 h-12 text-primary" })
+              )}
             </div>
             <h2 className="text-2xl font-bold">{slides[current].title}</h2>
             <p className="text-muted-foreground">{slides[current].description}</p>

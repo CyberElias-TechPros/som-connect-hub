@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Mail, CheckCircle } from 'lucide-react';
+import somLogo from '@/images/som-logo.png';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -18,8 +19,8 @@ export default function ForgotPassword() {
     return (
       <div className="min-h-screen flex flex-col justify-center p-6 bg-background">
         <div className="max-w-sm mx-auto w-full text-center space-y-6">
-          <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto">
-            <CheckCircle className="w-8 h-8 text-success" />
+          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto">
+            <img src={somLogo} alt="SOM Connect Logo" className="w-16 h-16 object-contain" />
           </div>
           <h1 className="text-2xl font-bold">Check Your Email</h1>
           <p className="text-muted-foreground">We've sent a password reset link to {email}</p>
@@ -36,6 +37,9 @@ export default function ForgotPassword() {
           <ArrowLeft className="w-4 h-4" /> Back to login
         </Link>
         <div className="space-y-2">
+          <div className="w-20 h-20 rounded-xl flex items-center justify-center mx-auto">
+            <img src={somLogo} alt="SOM Connect Logo" className="w-16 h-16 object-contain" />
+          </div>
           <h1 className="text-2xl font-bold">Forgot Password?</h1>
           <p className="text-muted-foreground">Enter your email and we'll send you a reset link</p>
         </div>

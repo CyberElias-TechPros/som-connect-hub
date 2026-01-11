@@ -9,6 +9,7 @@ const navItems = [
   { to: '/library', icon: Library, label: 'Library' },
   { to: '/tools', icon: BookOpen, label: 'Tools' },
   { to: '/community', icon: Users, label: 'Community' },
+  { to: '/qa', icon: Users, label: 'Q&A' },
   { to: '/profile', icon: User, label: 'Profile' },
 ];
 
