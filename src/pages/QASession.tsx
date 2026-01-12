@@ -120,7 +120,7 @@ export default function QASession() {
                 <CardTitle className="text-lg">Questions ({questions.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-96">
+                <ScrollArea className="h-64 md:h-96">
                   <div className="space-y-4">
                     {questions.map((question, index) => (
                       <div key={question.id}>

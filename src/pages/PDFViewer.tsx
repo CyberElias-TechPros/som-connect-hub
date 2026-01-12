@@ -99,7 +99,7 @@ export default function PDFViewer({ pdfUrl, pdfFile }: PDFViewerProps) {
               placeholder="Search in PDF..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="w-48"
+              className="w-full md:w-48"
             />
             <Button variant="outline" size="sm" onClick={handleSearch}>
               <Search className="w-4 h-4" />
