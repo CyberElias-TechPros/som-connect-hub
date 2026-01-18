@@ -2,6 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Accessibility styles */
+.high-contrast {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 222.2 47.4% 11.2%;
+  --radius: 0.5rem;
+}
+
+.dyslexia-font {
+  font-family: 'OpenDyslexic', sans-serif;
+}
+
+/* Focus styles for better accessibility */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Skip link for keyboard users */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  padding: 8px 16px;
+  z-index: 100;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Error states */
+.error-message {
+  color: var(--destructive);
+  background-color: var(--destructive)/10;
+  border: 1px solid var(--destructive);
+  padding: 12px;
+  border-radius: 6px;
+}
+
+/* Loading states */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* SOM CONNECT Design System
    Primary: Deep Blue #003366 (210 100% 20%)
    Gold Accent: #D4AF37 (45 75% 52%)
@@ -447,5 +533,41 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Responsive typography */
+@layer utilities {
+  .text-responsive {
+    font-size: clamp(1rem, 2vw, 1.25rem);
+  }
+
+  .text-responsive-lg {
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  /* Responsive padding */
+  .padding-responsive {
+    padding: clamp(1rem, 3vw, 2rem);
+  }
+
+  /* Responsive margins */
+  .margin-responsive {
+    margin: clamp(1rem, 3vw, 2rem);
+  }
+
+  /* Responsive grid */
+  .grid-responsive {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: clamp(1rem, 2vw, 2rem);
+  }
+
+  /* Responsive container */
+  .container-responsive {
+    width: 100%;
+    max-width: min(100% - 2rem, 1400px);
+    margin: 0 auto;
+    padding: 0 1rem;
   }
 }

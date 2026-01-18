@@ -1,1 +1,146 @@
-import React from 'react'; import { Link } from 'react-router-dom'; import { Card, CardContent } from '@/components/ui/card'; import { Button } from '@/components/ui/button'; import { Badge } from '@/components/ui/badge'; import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'; import { Settings, CreditCard, Upload, ChevronRight, Flame, Calendar } from 'lucide-react'; import { useAuth } from '@/contexts/AuthContext'; import { currentUser } from '@/lib/mock-data'; export default function Profile() { const { user, logout, hasRole } = useAuth(); const u = user || currentUser; const roleColors = { guest: 'bg-muted', member: 'bg-primary/10 text-primary', premium: 'bg-accent/10 text-accent-foreground border-accent', pastor: 'bg-accent text-accent-foreground', admin: 'bg-destructive/10 text-destructive' }; return (<div className="space-y-6 p-4 md:p-0"><div className="flex flex-col items-center text-center space-y-4"><Avatar className="w-24 h-24"><AvatarImage src={u.avatar} /><AvatarFallback className="text-2xl">{u.name.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar><div><h1 className="text-xl font-bold">{u.name}</h1><p className="text-muted-foreground">{u.email}</p><Badge className={`mt-2 capitalize ${roleColors[u.role]}`}>{u.role}</Badge></div><div className="flex gap-6 text-center"><div><p className="text-2xl font-bold">{u.streak}</p><p className="text-xs text-muted-foreground flex items-center gap-1"><Flame className="w-3 h-3" />Streak</p></div><div><p className="text-2xl font-bold">{new Date(u.joinedDate).getFullYear()}</p><p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />Joined</p></div></div><Link to="/profile/edit"><Button variant="outline">Edit Profile</Button></Link></div><div className="space-y-2">{hasRole(['pastor', 'admin']) && <Link to="/upload"><Card className="hover:bg-muted/50"><CardContent className="p-4 flex items-center gap-4"><Upload className="w-5 h-5 text-primary" /><span className="flex-1 font-medium">Upload Content</span><ChevronRight className="w-5 h-5 text-muted-foreground" /></CardContent></Card></Link>}<Link to="/subscription"><Card className="hover:bg-muted/50"><CardContent className="p-4 flex items-center gap-4"><CreditCard className="w-5 h-5 text-primary" /><span className="flex-1 font-medium">Subscription</span><Badge variant="secondary" className="capitalize">{u.role}</Badge><ChevronRight className="w-5 h-5 text-muted-foreground" /></CardContent></Card></Link><Link to="/settings"><Card className="hover:bg-muted/50"><CardContent className="p-4 flex items-center gap-4"><Settings className="w-5 h-5 text-primary" /><span className="flex-1 font-medium">Settings</span><ChevronRight className="w-5 h-5 text-muted-foreground" /></CardContent></Card></Link></div><Button variant="destructive" className="w-full" onClick={logout}>Sign Out</Button></div>); }
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Settings, CreditCard, Upload, ChevronRight, Flame, Calendar, Bell, User, Shield, BookOpen } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { currentUser } from '@/lib/mock-data';
+
+export default function Profile() {
+  const { user, logout, hasRole } = useAuth();
+  const u = user || currentUser;
+  
+  const roleColors = {
+    guest: 'bg-muted',
+    member: 'bg-primary/10 text-primary',
+    premium: 'bg-accent/10 text-accent-foreground border-accent',
+    pastor: 'bg-accent text-accent-foreground',
+    admin: 'bg-destructive/10 text-destructive'
+  };
+  
+  // Get user preferences
+  const preferences = u.preferences || {};
+  const notificationSettings = preferences.notificationSettings || {};
+  
+  // Count active notifications
+  const activeNotifications = Object.values(notificationSettings).filter(Boolean).length;
+  
+  return (
+    <div className="space-y-6 p-4 md:p-0">
+      <div className="flex flex-col items-center text-center space-y-4">
+        <Avatar className="w-24 h-24">
+          <AvatarImage src={u.avatar} />
+          <AvatarFallback className="text-2xl">{u.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+        </Avatar>
+        <div>
+          <h1 className="text-xl font-bold">{u.name}</h1>
+          <p className="text-muted-foreground">{u.email}</p>
+          <Badge className={`mt-2 capitalize ${roleColors[u.role]}`}>{u.role}</Badge>
+        </div>
+        <div className="flex gap-6 text-center">
+          <div>
+            <p className="text-2xl font-bold">{u.streak}</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Flame className="w-3 h-3" />Streak
+            </p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold">{new Date(u.joinedDate).getFullYear()}</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Calendar className="w-3 h-3" />Joined
+            </p>
+          </div>
+        </div>
+        <Link to="/profile/edit">
+          <Button variant="outline">Edit Profile</Button>
+        </Link>
+      </div>
+
+      <div className="space-y-2">
+        {hasRole(['pastor', 'admin']) && 
+          <Link to="/upload">
+            <Card className="hover:bg-muted/50">
+              <CardContent className="p-4 flex items-center gap-4">
+                <Upload className="w-5 h-5 text-primary" />
+                <span className="flex-1 font-medium">Upload Content</span>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+        }
+
+        <Link to="/subscription">
+          <Card className="hover:bg-muted/50">
+            <CardContent className="p-4 flex items-center gap-4">
+              <CreditCard className="w-5 h-5 text-primary" />
+              <span className="flex-1 font-medium">Subscription Plans</span>
+              <Badge variant="secondary" className="capitalize">{u.role}</Badge>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link to="/manage-subscription">
+          <Card className="hover:bg-muted/50">
+            <CardContent className="p-4 flex items-center gap-4">
+              <CreditCard className="w-5 h-5 text-primary" />
+              <span className="flex-1 font-medium">Manage Subscription</span>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link to="/settings">
+          <Card className="hover:bg-muted/50">
+            <CardContent className="p-4 flex items-center gap-4">
+              <Settings className="w-5 h-5 text-primary" />
+              <span className="flex-1 font-medium">Settings & Preferences</span>
+              <Badge variant="outline" className="text-xs">
+                {activeNotifications} active
+              </Badge>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link to="/notifications">
+          <Card className="hover:bg-muted/50">
+            <CardContent className="p-4 flex items-center gap-4">
+              <Bell className="w-5 h-5 text-primary" />
+              <span className="flex-1 font-medium">Notifications</span>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link to="/help">
+          <Card className="hover:bg-muted/50">
+            <CardContent className="p-4 flex items-center gap-4">
+              <BookOpen className="w-5 h-5 text-primary" />
+              <span className="flex-1 font-medium">Help & Support</span>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        {hasRole(['admin']) && 
+          <Link to="/admin">
+            <Card className="hover:bg-muted/50">
+              <CardContent className="p-4 flex items-center gap-4">
+                <Shield className="w-5 h-5 text-primary" />
+                <span className="flex-1 font-medium">Admin Dashboard</span>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+        }
+      </div>
+
+      <Button variant="destructive" className="w-full" onClick={logout}>
+        Sign Out
+      </Button>
+    </div>
+  );
+}

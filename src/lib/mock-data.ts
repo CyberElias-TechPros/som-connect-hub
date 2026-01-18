@@ -1,7 +1,7 @@
 // SOM CONNECT Mock Data
 
 // User roles
-export type UserRole = 'guest' | 'member' | 'premium' | 'pastor' | 'admin';
+export type UserRole = 'guest' | 'member' | 'pastor' | 'admin';
 
 export interface User {
   id: string;
@@ -13,6 +13,21 @@ export interface User {
   streak: number;
   bio?: string;
   affiliation?: string;
+  preferences?: UserPreferences;
+}
+
+export interface UserPreferences {
+  theme?: 'light' | 'dark' | 'system';
+  language?: string;
+  autoDownload?: boolean;
+  notificationSettings?: NotificationSettings;
+}
+
+export interface NotificationSettings {
+  pushNotifications?: boolean;
+  newContent?: boolean;
+  dailyReminders?: boolean;
+  community?: boolean;
 }
 
 export const currentUser: User = {
@@ -20,11 +35,22 @@ export const currentUser: User = {
   name: 'David Emmanuel',
   email: 'david.emmanuel@example.com',
   avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-  role: 'premium',
+  role: 'member',
   joinedDate: '2024-01-15',
   streak: 45,
   bio: 'Passionate about spiritual growth and community building.',
   affiliation: 'Christ Embassy Lagos Zone',
+  preferences: {
+    theme: 'system',
+    language: 'en',
+    autoDownload: true,
+    notificationSettings: {
+      pushNotifications: true,
+      newContent: true,
+      dailyReminders: true,
+      community: false,
+    }
+  }
 };
 
 // Content types

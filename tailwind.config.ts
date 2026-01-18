@@ -189,6 +189,33 @@ export default {
         "18": "4.5rem",
         "88": "22rem",
         "128": "32rem",
+        // Responsive spacing utilities
+        "responsive-xs": "0.5rem",
+        "responsive-sm": "0.75rem",
+        "responsive-md": "1rem",
+        "responsive-lg": "1.5rem",
+        "responsive-xl": "2rem",
+        "responsive-2xl": "3rem",
+      },
+      fontSize: {
+        // Responsive typography utilities
+        "responsive-xs": ["0.75rem", { lineHeight: "1rem" }],
+        "responsive-sm": ["0.875rem", { lineHeight: "1.25rem" }],
+        "responsive-base": ["1rem", { lineHeight: "1.5rem" }],
+        "responsive-lg": ["1.125rem", { lineHeight: "1.75rem" }],
+        "responsive-xl": ["1.25rem", { lineHeight: "1.75rem" }],
+        "responsive-2xl": ["1.5rem", { lineHeight: "2rem" }],
+        "responsive-3xl": ["1.875rem", { lineHeight: "2.25rem" }],
+        "responsive-4xl": ["2.25rem", { lineHeight: "2.5rem" }],
+      },
+      gridTemplateColumns: {
+        // Responsive grid utilities
+        "responsive-1": "repeat(1, minmax(0, 1fr))",
+        "responsive-2": "repeat(2, minmax(0, 1fr))",
+        "responsive-3": "repeat(3, minmax(0, 1fr))",
+        "responsive-4": "repeat(4, minmax(0, 1fr))",
+        "responsive-5": "repeat(5, minmax(0, 1fr))",
+        "responsive-6": "repeat(6, minmax(0, 1fr))",
       },
       transitionDuration: {
         "400": "400ms",

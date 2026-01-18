@@ -8,8 +8,9 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { ThumbsUp, Send, MessageCircle, Users } from 'lucide-react';
-import { qaSessions, sampleQuestions } from '@/lib/mock-data';
+import { ThumbsUp, Send, MessageCircle, Users, ArrowUp, ArrowDown } from 'lucide-react';
+import { qaSessions, sampleQuestions, currentUser } from '@/lib/mock-data';
+import ChatWindow from '@/components/community/ChatWindow';
 
 export default function QASession() {
   const { id } = useParams<{ id: string }>();
@@ -32,11 +33,27 @@ export default function QASession() {
     }
   };
 
+  const [upvotedQuestions, setUpvotedQuestions] = useState<Set<string>>(new Set());
+
   const handleUpvote = (questionId: string) => {
     setQuestions(prev =>
-      prev.map(q =>
-        q.id === questionId ? { ...q, upvotes: q.upvotes + 1 } : q
-      )
+      prev.map(q => {
+        if (q.id === questionId) {
+          // If already upvoted, remove upvote
+          if (upvotedQuestions.has(questionId)) {
+            setUpvotedQuestions(prevSet => {
+              const newSet = new Set(prevSet);
+              newSet.delete(questionId);
+              return newSet;
+            });
+            return { ...q, upvotes: Math.max(0, q.upvotes - 1) };
+          } else {
+            setUpvotedQuestions(prevSet => new Set(prevSet).add(questionId));
+            return { ...q, upvotes: q.upvotes + 1 };
+          }
+        }
+        return q;
+      })
     );
   };
 
@@ -90,8 +107,15 @@ export default function QASession() {
             </Card>
           </div>
 
-          {/* Chat Window */}
+          {/* Right Sidebar */}
           <div className="space-y-4">
+            {/* Live Chat */}
+            {session.status === 'live' && (
+              <div className="h-80">
+                <ChatWindow sessionId={session.id} />
+              </div>
+            )}
+
             {/* Submit Question */}
             <Card>
               <CardHeader>
@@ -145,9 +169,13 @@ export default function QASession() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleUpvote(question.id)}
-                              className="gap-1 h-8 px-2"
+                              className={`gap-1 h-8 px-2 ${upvotedQuestions.has(question.id) ? 'text-primary' : ''}`}
                             >
-                              <ThumbsUp className="w-3 h-3" />
+                              {upvotedQuestions.has(question.id) ? (
+                                <ArrowUp className="w-3 h-3" />
+                              ) : (
+                                <ThumbsUp className="w-3 h-3" />
+                              )}
                               {question.upvotes}
                             </Button>
                           </div>

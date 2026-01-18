@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,29 @@ import { Progress } from '@/components/ui/progress';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { Search, Play, Clock, TrendingUp, BookOpen, Users, MessageCircle, Library, Calendar, ChevronRight } from 'lucide-react';
 import { featuredContent, conferences, podcasts, originals, dailyConfessions, rorReadings, currentUser } from '@/lib/mock-data';
+import { ContentGridSkeleton, PageHeaderSkeleton } from '@/components/ui/SkeletonLoaders';
+import { useErrorHandling } from '@/hooks/use-error-handling';
 
 export default function Index() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const { handleError } = useErrorHandling();
+
+  // Simulate data loading
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Simulate API call delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setIsLoading(false);
+      } catch (error) {
+        handleError(error, 'Failed to load home page data');
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [handleError]);
 
   // Mock continue watching - content with progress
   const continueWatching = featuredContent.filter(c => c.progress).slice(0, 4);
@@ -60,6 +80,15 @@ export default function Index() {
     // In real app, navigate to search page with query
     console.log('Searching for:', searchQuery);
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8 p-4 md:p-0">
+        <PageHeaderSkeleton />
+        <ContentGridSkeleton count={3} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 p-4 md:p-0">

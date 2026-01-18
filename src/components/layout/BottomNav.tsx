@@ -1,8 +1,8 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Library, BookOpen, Users, User } from 'lucide-react';
+import { Home, Library, BookOpen, Users, User, Search, Heart, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
@@ -10,6 +10,8 @@ const navItems = [
   { to: '/tools', icon: BookOpen, label: 'Tools' },
   { to: '/community', icon: Users, label: 'Community' },
   { to: '/qa', icon: Users, label: 'Q&A' },
+  { to: '/playlists', icon: List, label: 'Playlists' },
+  { to: '/favorites', icon: Heart, label: 'Favorites' },
   { to: '/profile', icon: User, label: 'Profile' },
 ];
 
@@ -32,37 +34,53 @@ export function BottomNav() {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex flex-col items-center justify-center flex-1 h-full relative",
-                "transition-colors duration-200",
+                "flex flex-col items-center justify-center flex-1 h-full relative group",
+                "transition-colors duration-200 ease-in-out",
                 isActive ? "text-primary" : "text-muted-foreground"
               )}
               aria-current={isActive ? 'page' : undefined}
             >
-              <div className="relative">
-                <item.icon 
-                  className={cn(
-                    "w-5 h-5 transition-transform duration-200",
-                    isActive && "scale-110"
-                  )} 
-                />
-                {isActive && (
-                  <motion.div
-                    layoutId="bottomNavIndicator"
-                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent"
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  />
-                )}
+              <motion.div
+                className="relative"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              >
+                <motion.div
+                  initial={{ scale: 1 }}
+                  animate={{ scale: isActive ? 1.1 : 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                >
+                  <item.icon
+                    className={cn(
+                      "w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200",
+                      isActive && "scale-110"
+                    )} />
+                </motion.div>
+                <AnimatePresence>
+                  {isActive && (
+                    <motion.div
+                      layoutId="bottomNavIndicator"
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ type: "spring", stiffness: 600, damping: 25 }} />
+                  )}
+                </AnimatePresence>
+              </motion.div>
+              <div className="flex flex-col items-center">
+                <span className={cn(
+                  "text-xs mt-1 font-medium transition-all duration-200",
+                  isActive ? "opacity-100" : "opacity-70"
+                )}>
+                  {item.label}
+                </span>
               </div>
-              <span className={cn(
-                "text-xs mt-1 font-medium transition-all duration-200",
-                isActive ? "opacity-100" : "opacity-70"
-              )}>
-                {item.label}
-              </span>
             </NavLink>
           );
         })}
       </div>
     </nav>
   );
-}
+}export default BottomNav;

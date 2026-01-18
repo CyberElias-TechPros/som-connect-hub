@@ -135,18 +135,20 @@ export default function PDFViewer({ pdfUrl, pdfFile }: PDFViewerProps) {
       </div>
 
       {/* PDF Viewer */}
-      <div className="flex justify-center p-4">
+      <div className="flex justify-center p-4 max-w-full overflow-hidden">
         <Document
           file={pdfFile || pdfUrl}
           onLoadSuccess={onDocumentLoadSuccess}
           loading={<div className="text-center py-8">Loading PDF...</div>}
           error={<div className="text-center py-8 text-destructive">Error loading PDF</div>}
+          className="max-w-full"
         >
           <Page
             pageNumber={pageNumber}
             scale={scale}
             renderTextLayer={false}
             renderAnnotationLayer={false}
+            className="max-w-full"
           />
         </Document>
       </div>
