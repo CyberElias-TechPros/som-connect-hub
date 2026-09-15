@@ -1,281 +1,163 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
-import { Play, Download, Share2, Heart, Clock, Eye, Calendar, Lock, Bookmark, MessageSquare, Loader2 } from 'lucide-react';
+import { Play, Download, Share2, Heart, Clock, Eye, Calendar, Bookmark, MessageSquare, ArrowLeft, Sparkles, ArrowUpRight } from 'lucide-react';
 import { featuredContent, conferences, podcasts, originals } from '@/lib/mock-data';
-import { ContentGuard } from '@/components/auth/PermissionGuard';
 import { useToast } from '@/components/ui/use-toast';
+import { motion } from 'framer-motion';
 
-const allContent = [...featuredContent, ...conferences, ...podcasts, ...originals];
+const allContent = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
 
 export default function ContentDetail() {
   const { id } = useParams();
   const content = allContent.find(c => c.id === id) || allContent[0];
-  const [isFavorited, setIsFavorited] = useState(content.isFavorited || false);
+  const [isFav, setIsFav] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showFullDescription, setShowFullDescription] = useState(false);
   const { toast } = useToast();
 
-  const toggleFavorite = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsFavorited(!isFavorited);
-      setIsLoading(false);
-      toast({
-        title: isFavorited ? 'Removed from favorites' : 'Added to favorites',
-        description: `"${content.title}" has been ${isFavorited ? 'removed from' : 'added to'} your favorites.`,
-      });
-    }, 300);
-  };
-
-  const toggleBookmark = () => {
-    setIsBookmarked(!isBookmarked);
-    toast({
-      title: isBookmarked ? 'Bookmark removed' : 'Bookmark added',
-      description: `"${content.title}" has been ${isBookmarked ? 'removed from' : 'added to'} your bookmarks.`,
-    });
-  };
-
-  const handleDownload = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({
-        title: 'Download started',
-        description: `"${content.title}" is being downloaded and will be available offline.`,
-      });
-    }, 1000);
+  const toggleFav = () => {
+    setIsFav(!isFav);
+    toast({ title: isFav ? 'Removed from favorites' : 'Added to favorites', description: `"${content.title}" ${isFav ? 'removed from' : 'added to'} favorites.` });
   };
 
   const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: content.title,
-        text: `Check out "${content.title}" by ${content.speaker.name} on SOM Connect`,
-        url: window.location.href,
-      }).catch(err => {
-        console.error('Error sharing:', err);
-      });
-    } else {
-      // Fallback for browsers that don't support Web Share API
-      toast({
-        title: 'Share this content',
-        description: 'Copy the URL from your browser to share this content.',
-      });
-    }
+    navigator.clipboard.writeText(window.location.href);
+    toast({ title: 'Link copied', description: 'Share link copied to clipboard.' });
   };
 
-  const toggleDescription = () => {
-    setShowFullDescription(!showFullDescription);
+  const handleDownload = () => {
+    toast({ title: 'Download started', description: `"${content.title}" will be available offline.` });
   };
-
-  // Simulate loading state
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
-    <ContentGuard isPremium={content.isPremium}>
-      <div className="space-y-6 p-4 md:p-0">
-        <div className="relative aspect-video rounded-xl overflow-hidden bg-muted">
-          <img 
-            src={content.thumbnail} 
-            alt={content.title} 
-            className="w-full h-full object-cover" 
-            loading="lazy"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.src = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=340&fit=crop';
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-          <Link to={`/player/${content.id}`} aria-label={`Play ${content.title}`}>
-            <Button size="lg" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full w-16 h-16" aria-label="Play content">
-              <Play className="w-8 h-8 fill-current" />
-            </Button>
-          </Link>
-          <div className="absolute bottom-4 left-4 right-4 text-white">
-            <h1 className="text-2xl font-bold mb-2">{content.title}</h1>
+    <div className="space-y-8 max-w-[1200px] mx-auto">
+      <Link to="/library" className="inline-flex items-center gap-2 text-[13px] font-[600] tracking-[-0.01em] text-muted-foreground hover:text-foreground transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Back to library
+      </Link>
+
+      {/* Cinematic hero */}
+      <div className="relative overflow-hidden rounded-[2rem] bg-[#0A0E1A] min-h-[56vh] flex items-end">
+        <img src={content.thumbnail} alt={content.title} className="absolute inset-0 w-full h-full object-cover opacity-70" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#070A12] via-[#070A12]/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#070A12]/80 via-transparent to-transparent" />
+        <div className="absolute inset-0 opacity-[0.03] mix-blend-soft-light" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }} />
+
+        <div className="relative z-10 p-6 md:p-10 w-full flex flex-col md:flex-row gap-8 items-end">
+          <div className="flex-1 space-y-4">
             <div className="flex flex-wrap gap-2">
-              {content.tags.map(t => <Badge key={t} variant="secondary" className="bg-white/20">{t}</Badge>)}
+              <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur border border-white/10 text-white font-mono text-[10px] tracking-[0.15em] uppercase">{content.category}</span>
+              {content.isPremium && <span className="px-3 py-1 rounded-full bg-amber-300 text-black font-mono text-[10px] tracking-[0.15em] uppercase font-[700]">Premium • Included</span>}
+              <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur border border-white/10 text-white/70 font-mono text-[10px] tracking-[0.1em] uppercase flex items-center gap-1"><Eye className="w-3 h-3" /> {content.views.toLocaleString()} views</span>
             </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <Link to={`/player/${content.id}`} aria-label={`Play ${content.title}`}>
-            <Button className="gap-2" aria-label="Play content">
-              <Play className="w-4 h-4" />
-              Play
-            </Button>
-          </Link>
-          <Button variant="outline" className="gap-2" onClick={handleDownload} disabled={isLoading} aria-label="Download content">
-            <Download className="w-4 h-4" />
-            Download
-          </Button>
-          <Button variant="outline" size="icon" onClick={handleShare} aria-label="Share content">
-            <Share2 className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="icon" onClick={toggleFavorite} disabled={isLoading} aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}>
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
-            )}
-          </Button>
-          <Button variant="outline" size="icon" onClick={toggleBookmark} aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}>
-            <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-blue-500 text-blue-500' : ''}`} />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Avatar className="w-12 h-12">
-            <AvatarImage src={content.speaker.avatar} alt={content.speaker.name} />
-            <AvatarFallback>{content.speaker.name[0]}</AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="font-semibold">{content.speaker.name}</p>
-            <p className="text-sm text-muted-foreground">{content.speaker.title}</p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-6 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Clock className="w-4 h-4" />
-            {content.duration}
-          </span>
-          <span className="flex items-center gap-1">
-            <Eye className="w-4 h-4" />
-            {content.views.toLocaleString()} views
-          </span>
-          <span className="flex items-center gap-1">
-            <Calendar className="w-4 h-4" />
-            {new Date(content.date).toLocaleDateString()}
-          </span>
-        </div>
-
-        <div>
-          <h2 className="font-semibold mb-2">Description</h2>
-          <p className={`text-muted-foreground ${showFullDescription ? '' : 'line-clamp-3'}`}>
-            {content.description}
-          </p>
-          {content.description.length > 200 && (
-            <Button 
-              variant="link" 
-              className="p-0 h-auto text-sm text-primary" 
-              onClick={toggleDescription}
-              aria-label={showFullDescription ? 'Show less' : 'Show more'}
-            >
-              {showFullDescription ? 'Show less' : 'Show more'}
-            </Button>
-          )}
-        </div>
-
-        {/* Related Content Section */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Related Content</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allContent
-              .filter(c => c.id !== content.id && c.tags.some(tag => content.tags.includes(tag)))
-              .slice(0, 3)
-              .map(related => (
-                <Link key={related.id} to={`/library/${related.id}`} className="block" aria-label={`View ${related.title}`}>
-                  <div className="relative aspect-video rounded-lg overflow-hidden">
-                    <img 
-                      src={related.thumbnail} 
-                      alt={related.title} 
-                      className="w-full h-full object-cover" 
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <Button variant="secondary" size="sm" className="gap-2">
-                        <Play className="w-4 h-4" />
-                        Play
-                      </Button>
-                    </div>
-                  </div>
-                  <h3 className="font-medium mt-2 line-clamp-1">{related.title}</h3>
-                  <p className="text-sm text-muted-foreground">{related.speaker.name}</p>
-                </Link>
-              ))}
-          </div>
-        </div>
-
-        {/* Comments Section */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Comments</h2>
-          <div className="space-y-4">
-            <div className="flex gap-3">
-              <Avatar className="w-8 h-8">
-                <AvatarImage src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face" />
-                <AvatarFallback>JD</AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-sm">John Doe</p>
-                    <p className="text-xs text-muted-foreground">2 hours ago</p>
-                  </div>
-                </div>
-                <p className="text-sm mt-1">This teaching really blessed me! The insights on faith are life-changing.</p>
-                <div className="flex gap-2 mt-2">
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                    <Heart className="w-3 h-3 mr-1" /> Like
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                    <MessageSquare className="w-3 h-3 mr-1" /> Reply
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <Avatar className="w-8 h-8">
-                <AvatarImage src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face" />
-                <AvatarFallback>SA</AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-sm">Sarah Adams</p>
-                    <p className="text-xs text-muted-foreground">5 hours ago</p>
-                  </div>
-                </div>
-                <p className="text-sm mt-1">Great message! I've been applying these principles and seeing amazing results.</p>
-                <div className="flex gap-2 mt-2">
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                    <Heart className="w-3 h-3 mr-1" /> Like
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                    <MessageSquare className="w-3 h-3 mr-1" /> Reply
-                  </Button>
-                </div>
-              </div>
+            <h1 className="font-display text-[2rem] md:text-[3rem] leading-[0.9] tracking-[-0.03em] text-white text-balance max-w-[20ch]">{content.title}</h1>
+            <div className="flex flex-wrap items-center gap-4 text-[13px] text-white/60">
+              <span className="flex items-center gap-2"><Avatar className="w-7 h-7 border border-white/10"><AvatarImage src={content.speaker.avatar} /><AvatarFallback>{content.speaker.name[0]}</AvatarFallback></Avatar> {content.speaker.name}</span>
+              <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {content.duration}</span>
+              <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {new Date(content.date).toLocaleDateString()}</span>
             </div>
           </div>
 
           <div className="flex gap-2">
-            <Input placeholder="Add a comment..." className="flex-1" />
-            <Button size="sm">Post</Button>
+            <Link to={`/player/${content.id}`}>
+              <Button className="h-12 px-6 rounded-full bg-white text-black hover:bg-white/90 font-[650] gap-2 shadow-[0_8px_32px_hsl(0_0%_100%/_0.15)]"><Play className="w-4 h-4 fill-black" /> Watch now</Button>
+            </Link>
+            <Button variant="outline" size="icon" className="w-12 h-12 rounded-full bg-white/10 backdrop-blur border-white/10 text-white hover:bg-white/15" onClick={toggleFav}><Heart className={`w-5 h-5 ${isFav ? 'fill-white text-white' : ''}`} /></Button>
+          </div>
+        </div>
+
+        <Link to={`/player/${content.id}`} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-white/90 backdrop-blur flex items-center justify-center shadow-[0_0_60px_hsl(0_0%_100%/_0.2)] hover:scale-105 transition-transform group">
+          <Play className="w-8 h-8 fill-black text-black ml-1 group-hover:scale-110 transition-transform" />
+        </Link>
+      </div>
+
+      {/* Actions */}
+      <div className="flex flex-wrap gap-2">
+        <Link to={`/player/${content.id}`}><Button className="rounded-full bg-foreground text-background font-[600] gap-2 h-10 px-5"><Play className="w-4 h-4" /> Play</Button></Link>
+        <Button variant="outline" className="rounded-full gap-2 h-10 px-5 font-[600]" onClick={handleDownload}><Download className="w-4 h-4" /> Download</Button>
+        <Button variant="outline" size="icon" className="rounded-full w-10 h-10" onClick={handleShare}><Share2 className="w-4 h-4" /></Button>
+        <Button variant="outline" size="icon" className="rounded-full w-10 h-10" onClick={toggleFav}><Heart className={`w-4 h-4 ${isFav ? 'fill-red-500 text-red-500' : ''}`} /></Button>
+        <Button variant="outline" size="icon" className="rounded-full w-10 h-10" onClick={()=>setIsBookmarked(!isBookmarked)}><Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-foreground' : ''}`} /></Button>
+      </div>
+
+      <div className="grid lg:grid-cols-[1.6fr_1fr] gap-8">
+        <div className="space-y-8">
+          <div className="rounded-[1.5rem] border border-border/50 bg-card p-6 md:p-8">
+            <div className="flex items-center gap-2 mb-4"><Sparkles className="w-4 h-4 text-accent" /><span className="font-mono text-[11px] tracking-[0.15em] uppercase text-muted-foreground">About this teaching</span></div>
+            <p className="text-[15px] leading-[1.7] text-muted-foreground">{content.description}</p>
+            <div className="mt-6 flex flex-wrap gap-2">{content.tags.map(t=><span key={t} className="px-3 py-1 rounded-full bg-secondary text-[11px] font-mono tracking-[0.05em] uppercase">{t}</span>)}</div>
+          </div>
+
+          <div className="space-y-4">
+            <h2 className="font-display text-[1.5rem] tracking-[-0.02em]">Related teachings</h2>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {allContent.filter(c=>c.id!==content.id && c.tags.some(tag=>content.tags.includes(tag))).slice(0,4).map(rel=>(
+                <Link key={rel.id} to={`/library/${rel.id}`} className="group rounded-[1.25rem] overflow-hidden border border-border/50 bg-card hover:border-foreground/10 hover:shadow-[0_8px_24px_hsl(var(--foreground)/0.06)] transition-all">
+                  <div className="aspect-[16/9] relative overflow-hidden">
+                    <img src={rel.thumbnail} alt={rel.title} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    <div className="absolute bottom-2 right-2 px-2 py-1 rounded-full bg-black/60 backdrop-blur text-white text-[10px] font-mono">{rel.duration}</div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-[600] text-[14px] leading-[1.3] line-clamp-1">{rel.title}</h3>
+                    <p className="text-[12px] text-muted-foreground mt-1">{rel.speaker.name}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="rounded-[1.5rem] border border-border/50 bg-card p-6">
+            <h3 className="font-[650] tracking-[-0.01em] mb-4">Speaker</h3>
+            <div className="flex gap-4">
+              <Avatar className="w-14 h-14"><AvatarImage src={content.speaker.avatar} /><AvatarFallback>{content.speaker.name[0]}</AvatarFallback></Avatar>
+              <div>
+                <div className="font-[650] tracking-[-0.01em]">{content.speaker.name}</div>
+                <div className="text-[12px] text-muted-foreground leading-[1.4] mt-1">{content.speaker.title}</div>
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" variant="outline" className="rounded-full h-8 px-3 text-[12px] font-[600]">Follow</Button>
+                  <Button size="sm" variant="ghost" className="rounded-full h-8 px-3 text-[12px]">View profile</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] bg-foreground text-background p-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-accent/20 to-transparent rounded-full blur-2xl" />
+            <div className="relative">
+              <h3 className="font-display text-[1.3rem] leading-[0.95] tracking-[-0.02em]">Go deeper with Premium</h3>
+              <p className="mt-2 text-[13px] leading-[1.5] text-background/60">Offline downloads, HD streaming, exclusive teachings.</p>
+              <Link to="/subscription" className="mt-4 inline-flex"><Button size="sm" className="rounded-full bg-white text-black hover:bg-white/90 font-[650] gap-1">Upgrade <ArrowUpRight className="w-3 h-3" /></Button></Link>
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-border/50 bg-card p-6">
+            <h3 className="font-[650] tracking-[-0.01em] mb-4">Comments • 2</h3>
+            <div className="space-y-4">
+              {[
+                { name: 'John Doe', time: '2h ago', text: 'This teaching blessed me! Insights on faith are life-changing.' },
+                { name: 'Sarah Adams', time: '5h ago', text: 'Applying these principles and seeing amazing results.' },
+              ].map((c,i)=>(
+                <div key={i} className="flex gap-3">
+                  <Avatar className="w-8 h-8"><AvatarFallback>{c.name[0]}</AvatarFallback></Avatar>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2"><span className="font-[600] text-[13px]">{c.name}</span><span className="text-[11px] text-muted-foreground">{c.time}</span></div>
+                    <p className="text-[13px] leading-[1.5] text-muted-foreground mt-1">{c.text}</p>
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-2 pt-2">
+                <Input placeholder="Add a comment…" className="rounded-full h-10 bg-secondary border-border/50" />
+                <Button className="rounded-full h-10 px-5 bg-foreground text-background">Post</Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </ContentGuard>
+    </div>
   );
 }

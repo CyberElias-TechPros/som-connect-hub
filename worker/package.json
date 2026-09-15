@@ -1,0 +1,22 @@
+{
+  "name": "som-connect-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --persist",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create som-connect-db",
+    "db:migrate": "wrangler d1 execute som-connect-db --file=./src/db/schema.sql",
+    "db:seed": "wrangler d1 execute som-connect-db --file=./src/db/seed.sql",
+    "typegen": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "wrangler": "^3.78.0",
+    "typescript": "^5.5.0"
+  }
+}

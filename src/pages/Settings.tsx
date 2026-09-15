@@ -1,216 +1,85 @@
 import React, { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Moon, Sun, Globe, Download, Bell, BookOpen, Users, Megaphone } from 'lucide-react';
+import { Settings as SettingsIcon, Moon, Bell, Download, Shield, Sparkles, LogOut } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { currentUser } from '@/lib/mock-data';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
+  const { logout } = useAuth();
   const { toast } = useToast();
-  
-  // Initialize notification settings from user preferences
-  const [notificationSettings, setNotificationSettings] = useState({
-    pushNotifications: currentUser.preferences?.notificationSettings?.pushNotifications || true,
-    newContent: currentUser.preferences?.notificationSettings?.newContent || true,
-    dailyReminders: currentUser.preferences?.notificationSettings?.dailyReminders || true,
-    community: currentUser.preferences?.notificationSettings?.community || false,
-  });
-  
-  const [autoDownload, setAutoDownload] = useState(
-    currentUser.preferences?.autoDownload || false
-  );
-  
-  const handleNotificationChange = (setting: keyof typeof notificationSettings, value: boolean) => {
-    setNotificationSettings(prev => ({
-      ...prev,
-      [setting]: value,
-    }));
-    
-    toast({
-      title: 'Notification settings updated',
-      description: `Turned ${value ? 'on' : 'off'} ${setting.replace(/([A-Z])/g, ' $1')}`,
-    });
-  };
-  
-  const handleAutoDownloadChange = (value: boolean) => {
-    setAutoDownload(value);
-    toast({
-      title: 'Auto-download settings updated',
-      description: value ? 'Content will be downloaded automatically on WiFi' : 'Auto-download disabled',
-    });
-  };
-  
-  const handleSavePreferences = () => {
-    // In a real app, this would call an API to save preferences
-    console.log('Saving preferences:', {
-      theme,
-      autoDownload,
-      notificationSettings,
-    });
-    
-    toast({
-      title: 'Preferences saved',
-      description: 'Your settings have been updated successfully',
-    });
-  };
-  
+  const [notifs, setNotifs] = useState({ push: true, content: true, daily: true, community: false });
+  const [offline, setOffline] = useState({ autoDownload: true, wifiOnly: true });
+
+  const save = () => toast({ title: 'Settings saved', description: 'Your preferences have been updated — happy path.' });
+
   return (
-    <div className="space-y-6 p-4 md:p-0">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold" id="settings-heading">Settings</h1>
-        <button
-          onClick={handleSavePreferences}
-          className="text-sm text-primary hover:underline"
-          aria-label="Save all preferences"
-          aria-describedby="settings-heading"
-        >
-          Save Preferences
-        </button>
+    <div className="space-y-8 max-w-[800px] mx-auto">
+      <div>
+        <div className="flex items-center gap-2 mb-3"><span className="px-2.5 py-1 rounded-full bg-foreground text-background font-mono text-[10px] tracking-[0.15em] uppercase">Settings</span><span className="font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground flex items-center gap-1"><SettingsIcon className="w-3 h-3" /> Preferences</span></div>
+        <h1 className="font-display text-[2.2rem] md:text-[3rem] leading-[0.9] tracking-[-0.03em]">Make it <span className="italic font-[300] text-muted-foreground">yours.</span></h1>
       </div>
 
-      <Card>
-        <CardContent className="p-0 divide-y">
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Moon className="w-5 h-5 text-muted-foreground" />
-              <Label>Theme</Label>
-            </div>
-            <Select value={theme} onValueChange={(v: 'light' | 'dark' | 'system') => setTheme(v)}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="light">
-                  <span className="flex items-center gap-2">
-                    <Sun className="w-4 h-4" />Light
-                  </span>
-                </SelectItem>
-                <SelectItem value="dark">
-                  <span className="flex items-center gap-2">
-                    <Moon className="w-4 h-4" />Dark
-                  </span>
-                </SelectItem>
-                <SelectItem value="system">System</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Globe className="w-5 h-5 text-muted-foreground" />
-              <Label>Language</Label>
-            </div>
-            <Select defaultValue="en">
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="fr">Français</SelectItem>
-                <SelectItem value="es">Español</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Download className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <Label>Auto-download</Label>
-                <p className="text-xs text-muted-foreground">Download new content on WiFi</p>
+      <div className="grid gap-5">
+        <Card className="rounded-[1.5rem] border-border/50">
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[16px] font-[700]"><Moon className="w-4 h-4" /> Appearance</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-[1rem] bg-secondary/60 border border-border/50">
+              <div><div className="font-[600] text-[14px]">Theme</div><div className="text-[12px] text-muted-foreground">Light, dark, or system</div></div>
+              <div className="flex gap-1 p-1 rounded-full bg-card border border-border/50">
+                {['light','dark','system'].map(t=>(
+                  <button key={t} onClick={()=>setTheme(t as any)} className={`px-3 py-1 rounded-full text-[12px] font-[600] capitalize transition-colors ${theme===t ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>{t}</button>
+                ))}
               </div>
             </div>
-            <Switch
-              checked={autoDownload}
-              onCheckedChange={handleAutoDownloadChange}
-              aria-label="Toggle auto-download"
-              id="auto-download-switch"
-            />
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardContent className="p-0 divide-y">
-          <div className="p-4">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Bell className="w-5 h-5" />
-              Notification Settings
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Manage what notifications you receive
-            </p>
-          </div>
-
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Bell className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <Label>Push Notifications</Label>
-                <p className="text-xs text-muted-foreground">Enable all notifications</p>
+        <Card className="rounded-[1.5rem] border-border/50">
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[16px] font-[700]"><Bell className="w-4 h-4" /> Notifications</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {[
+              { k: 'push', label: 'Push notifications', desc: 'Get notified on this device' },
+              { k: 'content', label: 'New content', desc: 'New teachings from speakers you follow' },
+              { k: 'daily', label: 'Daily reminders', desc: 'Daily confession & ROR reminders' },
+              { k: 'community', label: 'Community activity', desc: 'Replies, likes, group updates' },
+            ].map(item=>(
+              <div key={item.k} className="flex items-center justify-between p-4 rounded-[1rem] bg-secondary/40 border border-border/30">
+                <div><div className="font-[600] text-[14px]">{item.label}</div><div className="text-[12px] text-muted-foreground">{item.desc}</div></div>
+                <Switch checked={(notifs as any)[item.k]} onCheckedChange={v=>setNotifs({ ...notifs, [item.k]: v })} />
               </div>
-            </div>
-            <Switch
-              checked={notificationSettings.pushNotifications}
-              onCheckedChange={(v) => handleNotificationChange('pushNotifications', v)}
-              aria-label="Toggle push notifications"
-              id="push-notifications-switch"
-            />
-          </div>
+            ))}
+          </CardContent>
+        </Card>
 
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Megaphone className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <Label>New Content</Label>
-                <p className="text-xs text-muted-foreground">When new content is available</p>
-              </div>
+        <Card className="rounded-[1.5rem] border-border/50">
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[16px] font-[700]"><Download className="w-4 h-4" /> Offline & storage</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between p-4 rounded-[1rem] bg-secondary/40 border border-border/30">
+              <div><div className="font-[600] text-[14px]">Auto-download</div><div className="text-[12px] text-muted-foreground">Download favorites for offline</div></div>
+              <Switch checked={offline.autoDownload} onCheckedChange={v=>setOffline({ ...offline, autoDownload: v })} />
             </div>
-            <Switch
-              checked={notificationSettings.newContent}
-              onCheckedChange={(v) => handleNotificationChange('newContent', v)}
-              aria-label="Toggle new content notifications"
-              id="new-content-switch"
-            />
-          </div>
+            <div className="flex items-center justify-between p-4 rounded-[1rem] bg-secondary/40 border border-border/30">
+              <div><div className="font-[600] text-[14px]">Wi-Fi only</div><div className="text-[12px] text-muted-foreground">Only download on Wi-Fi</div></div>
+              <Switch checked={offline.wifiOnly} onCheckedChange={v=>setOffline({ ...offline, wifiOnly: v })} />
+            </div>
+          </CardContent>
+        </Card>
 
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <BookOpen className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <Label>Daily Reminders</Label>
-                <p className="text-xs text-muted-foreground">Confession & ROR reminders</p>
-              </div>
-            </div>
-            <Switch
-              checked={notificationSettings.dailyReminders}
-              onCheckedChange={(v) => handleNotificationChange('dailyReminders', v)}
-              aria-label="Toggle daily reminders notifications"
-              id="daily-reminders-switch"
-            />
-          </div>
+        <Card className="rounded-[1.5rem] border-border/50 bg-foreground text-background p-6 flex gap-4">
+          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0"><Shield className="w-5 h-5" /></div>
+          <div className="flex-1"><div className="font-[700] tracking-[-0.01em]">Privacy & data</div><div className="text-[13px] leading-[1.5] text-background/60 mt-1">We never sell your data. All settings are stored locally in this demo. Happy path — nothing breaks.</div></div>
+        </Card>
 
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Users className="w-5 h-5 text-muted-foreground" />
-              <div>
-                <Label>Community</Label>
-                <p className="text-xs text-muted-foreground">Replies and mentions</p>
-              </div>
-            </div>
-            <Switch
-              checked={notificationSettings.community}
-              onCheckedChange={(v) => handleNotificationChange('community', v)}
-              aria-label="Toggle community notifications"
-              id="community-switch"
-            />
-          </div>
-        </CardContent>
-      </Card>
+        <div className="flex gap-3">
+          <Button className="flex-1 rounded-full h-11 bg-foreground text-background font-[600]" onClick={save}><Sparkles className="w-4 h-4 mr-1" /> Save settings</Button>
+          <Button variant="outline" className="rounded-full h-11 px-6 font-[600] gap-1 border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={logout}><LogOut className="w-4 h-4" /> Sign out</Button>
+        </div>
+      </div>
     </div>
   );
 }

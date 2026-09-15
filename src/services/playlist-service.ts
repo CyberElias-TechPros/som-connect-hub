@@ -1,4 +1,5 @@
 import { Playlist, ContentItem, currentUser } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
 
 interface UserPlaylist extends Playlist {
   userId: string;
@@ -8,14 +9,16 @@ interface UserPlaylist extends Playlist {
 
 class PlaylistService {
   private playlists: UserPlaylist[];
+  private initialized = false;
 
   constructor() {
     this.playlists = [];
     this.initialize();
   }
 
-  // Initialize with some default playlists
   initialize(): void {
+    if (this.initialized) return;
+    this.initialized = true;
     const defaultPlaylists: UserPlaylist[] = [
       {
         id: 'user-1',
@@ -42,21 +45,50 @@ class PlaylistService {
         updatedAt: new Date().toISOString(),
       },
     ];
-    
-    this.playlists = defaultPlaylists;
+    try {
+      const stored = localStorage.getItem('som_playlists');
+      if (stored) this.playlists = JSON.parse(stored);
+      else this.playlists = defaultPlaylists;
+    } catch {
+      this.playlists = defaultPlaylists;
+    }
+    this.syncFromApi().catch(()=>{});
   }
 
-  // Get all playlists for current user
+  private persist() {
+    try { localStorage.setItem('som_playlists', JSON.stringify(this.playlists)); } catch {}
+  }
+
+  private async syncFromApi() {
+    if (!apiClient.hasApi) return;
+    try {
+      const data = await apiClient.get<{ items: any[] }>('/playlists');
+      if (data.items?.length) {
+        this.playlists = data.items.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          thumbnail: p.thumbnail,
+          contentIds: p.contentIds || [],
+          createdDate: p.created_at || p.createdDate,
+          isPublic: !!p.is_public || !!p.isPublic,
+          userId: p.user_id || currentUser.id,
+          createdBy: currentUser.name,
+          updatedAt: p.updated_at || new Date().toISOString(),
+        }));
+        this.persist();
+      }
+    } catch {}
+  }
+
   getUserPlaylists(): UserPlaylist[] {
     return this.playlists.filter(playlist => playlist.userId === currentUser.id);
   }
 
-  // Get playlist by ID
   getPlaylistById(id: string): UserPlaylist | undefined {
     return this.playlists.find(playlist => playlist.id === id);
   }
 
-  // Create a new playlist
   createPlaylist(name: string, description: string, isPublic: boolean = false): UserPlaylist {
     const newPlaylist: UserPlaylist = {
       id: `user-${Date.now()}`,
@@ -70,51 +102,50 @@ class PlaylistService {
       createdBy: currentUser.name,
       updatedAt: new Date().toISOString(),
     };
-    
     this.playlists.push(newPlaylist);
+    this.persist();
+    if (apiClient.hasApi) {
+      apiClient.post('/playlists', { name, description, isPublic }).catch(()=>{});
+    }
     return newPlaylist;
   }
 
-  // Update playlist
   updatePlaylist(id: string, updates: Partial<UserPlaylist>): UserPlaylist | undefined {
     const index = this.playlists.findIndex(playlist => playlist.id === id);
     if (index !== -1) {
-      const updatedPlaylist = {
-        ...this.playlists[index],
-        ...updates,
-        updatedAt: new Date().toISOString(),
-      };
-      
+      const updatedPlaylist = { ...this.playlists[index], ...updates, updatedAt: new Date().toISOString() };
       this.playlists[index] = updatedPlaylist;
+      this.persist();
       return updatedPlaylist;
     }
     return undefined;
   }
 
-  // Delete playlist
   deletePlaylist(id: string): boolean {
     const index = this.playlists.findIndex(playlist => playlist.id === id);
     if (index !== -1) {
       this.playlists.splice(index, 1);
+      this.persist();
+      if (apiClient.hasApi) apiClient.delete(`/playlists/${id}`).catch(()=>{});
       return true;
     }
     return false;
   }
 
-  // Add content to playlist
   addContentToPlaylist(playlistId: string, contentId: string): boolean {
     const playlist = this.getPlaylistById(playlistId);
     if (playlist) {
       if (!playlist.contentIds.includes(contentId)) {
         playlist.contentIds.push(contentId);
         playlist.updatedAt = new Date().toISOString();
+        this.persist();
+        if (apiClient.hasApi) apiClient.post(`/playlists/${playlistId}/items`, { contentId }).catch(()=>{});
         return true;
       }
     }
     return false;
   }
 
-  // Remove content from playlist
   removeContentFromPlaylist(playlistId: string, contentId: string): boolean {
     const playlist = this.getPlaylistById(playlistId);
     if (playlist) {
@@ -122,33 +153,29 @@ class PlaylistService {
       if (index !== -1) {
         playlist.contentIds.splice(index, 1);
         playlist.updatedAt = new Date().toISOString();
+        this.persist();
+        if (apiClient.hasApi) apiClient.delete(`/playlists/${playlistId}/items/${contentId}`).catch(()=>{});
         return true;
       }
     }
     return false;
   }
 
-  // Check if content is in playlist
   isContentInPlaylist(playlistId: string, contentId: string): boolean {
     const playlist = this.getPlaylistById(playlistId);
     return playlist ? playlist.contentIds.includes(contentId) : false;
   }
 
-  // Get content in playlist
   getContentInPlaylist(playlistId: string, allContent: ContentItem[]): ContentItem[] {
     const playlist = this.getPlaylistById(playlistId);
-    if (playlist) {
-      return allContent.filter(content => playlist.contentIds.includes(content.id));
-    }
+    if (playlist) return allContent.filter(content => playlist.contentIds.includes(content.id));
     return [];
   }
 
-  // Get playlists containing specific content
   getPlaylistsWithContent(contentId: string): UserPlaylist[] {
     return this.playlists.filter(playlist => playlist.contentIds.includes(contentId));
   }
 
-  // Search playlists
   searchPlaylists(query: string): UserPlaylist[] {
     const lowerQuery = query.toLowerCase();
     return this.playlists.filter(playlist =>
@@ -157,37 +184,27 @@ class PlaylistService {
     );
   }
 
-  // Get public playlists (from other users)
   getPublicPlaylists(): UserPlaylist[] {
     return this.playlists.filter(playlist => playlist.isPublic && playlist.userId !== currentUser.id);
   }
 
-  // Get playlist count
-  getPlaylistCount(): number {
-    return this.playlists.length;
-  }
+  getPlaylistCount(): number { return this.playlists.length; }
+  getTotalContentCount(): number { return this.playlists.reduce((total, playlist) => total + playlist.contentIds.length, 0); }
 
-  // Get total content across all playlists
-  getTotalContentCount(): number {
-    return this.playlists.reduce((total, playlist) => total + playlist.contentIds.length, 0);
-  }
-
-  // Reorder content in playlist
   reorderContentInPlaylist(playlistId: string, oldIndex: number, newIndex: number): boolean {
     const playlist = this.getPlaylistById(playlistId);
     if (playlist) {
       const contentIds = [...playlist.contentIds];
       const [removed] = contentIds.splice(oldIndex, 1);
       contentIds.splice(newIndex, 0, removed);
-      
       playlist.contentIds = contentIds;
       playlist.updatedAt = new Date().toISOString();
+      this.persist();
       return true;
     }
     return false;
   }
 
-  // Duplicate playlist
   duplicatePlaylist(playlistId: string): UserPlaylist | undefined {
     const originalPlaylist = this.getPlaylistById(playlistId);
     if (originalPlaylist) {
@@ -198,25 +215,19 @@ class PlaylistService {
         createdDate: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      
       this.playlists.push(duplicatedPlaylist);
+      this.persist();
       return duplicatedPlaylist;
     }
     return undefined;
   }
 
-  // Get recently updated playlists
   getRecentlyUpdatedPlaylists(limit: number = 5): UserPlaylist[] {
-    return [...this.playlists]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, limit);
+    return [...this.playlists].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, limit);
   }
 
-  // Get most popular playlists (by content count)
   getPopularPlaylists(limit: number = 5): UserPlaylist[] {
-    return [...this.playlists]
-      .sort((a, b) => b.contentIds.length - a.contentIds.length)
-      .slice(0, limit);
+    return [...this.playlists].sort((a, b) => b.contentIds.length - a.contentIds.length).slice(0, limit);
   }
 }
 

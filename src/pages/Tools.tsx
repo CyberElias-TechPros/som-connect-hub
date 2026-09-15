@@ -1,1 +1,134 @@
-import React, { useState, useRef, useEffect } from 'react'; import { Link } from 'react-router-dom'; import { Card, CardContent } from '@/components/ui/card'; import { Button } from '@/components/ui/button'; import { Badge } from '@/components/ui/badge'; import { Flame, BookOpen, ChevronRight, Volume2, Share2, Play, Pause, SkipBack, SkipForward } from 'lucide-react'; import { dailyConfessions, rorReadings, currentUser } from '@/lib/mock-data'; import { toast } from '@/components/ui/use-toast'; export default function Tools() { const confession = dailyConfessions[0]; const ror = rorReadings[0]; const [isPlaying, setIsPlaying] = useState(false); const [currentTime, setCurrentTime] = useState(0); const [duration, setDuration] = useState(0); const [progress, setProgress] = useState(0); const audioRef = useRef<HTMLAudioElement>(null); const [streak, setStreak] = useState(currentUser.streak); const [showShareOptions, setShowShareOptions] = useState(false); const togglePlay = () => { if (isPlaying) { audioRef.current?.pause(); } else { audioRef.current?.play(); } setIsPlaying(!isPlaying); }; const handleTimeUpdate = () => { if (audioRef.current) { setCurrentTime(audioRef.current.currentTime); setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100); } }; const handleLoadedMetadata = () => { if (audioRef.current) { setDuration(audioRef.current.duration); } }; const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => { const seekTime = parseFloat(e.target.value); if (audioRef.current) { audioRef.current.currentTime = seekTime; setCurrentTime(seekTime); } }; const handleRewind = () => { if (audioRef.current) { audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 15); } }; const handleForward = () => { if (audioRef.current) { audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 15); } }; const formatTime = (time: number) => { const minutes = Math.floor(time / 60); const seconds = Math.floor(time % 60); return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`; }; const incrementStreak = () => { const newStreak = streak + 1; setStreak(newStreak); toast({ title: 'Streak Updated!', description: `Your streak is now ${newStreak} days! Keep going!`, }); }; const shareContent = (type: 'confession' | 'ror') => { const content = type === 'confession' ? `${confession.title}: ${confession.content}` : `${ror.title}: ${ror.content}`; const shareUrl = window.location.href; navigator.clipboard.writeText(`${content}\n\nShared from SOM Connect: ${shareUrl}`); toast({ title: 'Copied to clipboard!', description: 'Content copied to clipboard for sharing.', }); setShowShareOptions(false); }; const handleCompleteTask = () => { incrementStreak(); }; useEffect(() => { return () => { if (audioRef.current) { audioRef.current.pause(); } }; }, []); return (<div className="space-y-6 p-4 md:p-0"><h1 className="text-2xl font-bold">Daily Spiritual Tools</h1><Card className="bg-gradient-to-r from-accent to-accent/80"><CardContent className="p-6 flex items-center gap-4"><div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center"><Flame className="w-7 h-7 text-white" /></div><div className="text-white"><p className="text-2xl font-bold">{streak} Days</p><p className="text-sm opacity-80">Keep your streak going!</p></div><Button variant="ghost" size="icon" className="ml-auto text-white" onClick={incrementStreak} aria-label="Increment streak"><Flame className="w-5 h-5" /></Button></CardContent></Card><div className="space-y-4"><div className="flex items-center justify-between"><h2 className="section-header">Today's Confession</h2><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => shareContent('confession')} aria-label="Share confession"><Share2 className="w-5 h-5" /></Button><Button variant="ghost" size="icon" onClick={togglePlay} aria-label={isPlaying ? 'Pause audio' : 'Play audio'}><Volume2 className="w-5 h-5" /></Button></div></div><Card><CardContent className="p-5 space-y-3"><Badge className="bg-primary/10 text-primary">{confession.scriptureRef}</Badge><h3 className="font-semibold text-lg">{confession.title}</h3><p className="text-muted-foreground leading-relaxed">{confession.content}</p><blockquote className="border-l-4 border-accent pl-4 italic text-sm text-muted-foreground">"{confession.scripture}"</blockquote><div className="space-y-2"><div className="flex items-center gap-2 text-sm"><span>{formatTime(currentTime)}</span><div className="flex-1"><input type="range" min="0" max={duration || 0} value={currentTime} onChange={handleSeek} className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer" aria-label="Audio progress slider" /></div><span>{formatTime(duration)}</span></div><div className="flex items-center justify-center gap-4"><Button variant="ghost" size="icon" onClick={handleRewind} aria-label="Rewind 15 seconds"><SkipBack className="w-5 h-5" /></Button><Button variant="ghost" size="icon" onClick={togglePlay} aria-label={isPlaying ? 'Pause audio' : 'Play audio'}>{isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}</Button><Button variant="ghost" size="icon" onClick={handleForward} aria-label="Fast forward 15 seconds"><SkipForward className="w-5 h-5" /></Button></div></div><Button className="w-full mt-2" onClick={handleCompleteTask} aria-label="Mark confession as completed">Mark as Completed</Button></CardContent></Card></div><div className="space-y-4"><div className="flex items-center justify-between"><h2 className="section-header">Rhapsody of Realities</h2><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => shareContent('ror')} aria-label="Share ROR reading"><Share2 className="w-5 h-5" /></Button><Link to="/tools/ror-plan"><Button variant="ghost" size="sm">View Plan <ChevronRight className="w-4 h-4 ml-1" /></Button></Link></div></div><Card><CardContent className="p-5 space-y-3"><Badge variant="secondary">{ror.theme}</Badge><h3 className="font-semibold text-lg">{ror.title}</h3><p className="text-sm text-muted-foreground">{ror.scriptureRef}</p><p className="text-muted-foreground line-clamp-3">{ror.content}</p><Button className="w-full" onClick={handleCompleteTask} aria-label="Mark ROR reading as completed">Mark as Completed</Button></CardContent></Card></div><Link to="/publications"><Card className="hover:bg-muted/50 transition-colors card-hover"><CardContent className="p-5 flex items-center gap-4"><div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center"><BookOpen className="w-6 h-6 text-primary" /></div><div className="flex-1"><h3 className="font-semibold">Publications</h3><p className="text-sm text-muted-foreground">PK Magazines & Newsletters</p></div><ChevronRight className="w-5 h-5 text-muted-foreground" /></CardContent></Card></Link><audio ref={audioRef} src="/audio/daily-confession.mp3" onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onEnded={() => setIsPlaying(false)} aria-label="Daily confession audio player" /></div>); }
+import React, { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Flame, BookOpen, ChevronRight, Volume2, Share2, Play, Pause, SkipBack, SkipForward, Sparkles, Check } from 'lucide-react';
+import { dailyConfessions, rorReadings, currentUser } from '@/lib/mock-data';
+import { motion } from 'framer-motion';
+
+export default function Tools() {
+  const confession = dailyConfessions[0];
+  const ror = rorReadings[0];
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(12);
+  const [duration] = useState(180);
+  const [streak, setStreak] = useState(currentUser.streak);
+  const [completed, setCompleted] = useState<string[]>([]);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const togglePlay = () => setIsPlaying(!isPlaying);
+  const formatTime = (t: number) => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
+
+  const markCompleted = (id: string) => {
+    if (!completed.includes(id)) {
+      setCompleted([...completed, id]);
+      setStreak(s=>s+1);
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-[1100px] mx-auto">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="px-2.5 py-1 rounded-full bg-foreground text-background font-mono text-[10px] tracking-[0.15em] uppercase">Daily Tools</span>
+            <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground flex items-center gap-1"><Sparkles className="w-3 h-3" /> Spiritual disciplines</span>
+          </div>
+          <h1 className="font-display text-[2.2rem] md:text-[3rem] leading-[0.9] tracking-[-0.03em]">Daily <span className="italic font-[300] text-muted-foreground">rhythms.</span></h1>
+        </div>
+      </div>
+
+      {/* Streak */}
+      <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="rounded-[1.75rem] bg-foreground text-background p-6 md:p-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-amber-400/20 to-transparent rounded-full blur-3xl" />
+        <div className="relative flex items-center gap-5">
+          <div className="w-16 h-16 rounded-full bg-white/10 backdrop-blur border border-white/10 flex items-center justify-center"><Flame className="w-8 h-8 text-amber-300" /></div>
+          <div>
+            <div className="font-display text-[2.5rem] leading-none">{streak} days</div>
+            <div className="font-mono text-[11px] tracking-[0.1em] uppercase opacity-60 mt-1">Keep your streak • {completed.length} completed today</div>
+          </div>
+          <div className="ml-auto hidden md:flex gap-1.5">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className={`w-9 h-9 rounded-full border flex items-center justify-center text-[11px] font-[700] ${i < 5 ? 'bg-white text-black border-white' : 'bg-white/10 border-white/10 text-white/40'}`}>{i < 5 ? <Check className="w-4 h-4" /> : i+1}</div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="grid md:grid-cols-2 gap-5">
+        {/* Confession */}
+        <motion.div initial={{ y: 16, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} viewport={{ once: true }} className="rounded-[1.75rem] border border-border/50 bg-card p-7 space-y-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center"><Volume2 className="w-5 h-5 text-amber-600" /></div>
+              <div>
+                <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted-foreground">{confession.date}</div>
+                <div className="font-[650] text-[13px]">Daily Confession</div>
+              </div>
+            </div>
+            <Badge className="rounded-full bg-secondary font-mono text-[10px] uppercase">{confession.scriptureRef}</Badge>
+          </div>
+
+          <div>
+            <h3 className="font-display text-[1.6rem] leading-[0.95] tracking-[-0.02em]">{confession.title}</h3>
+            <p className="mt-3 text-[14px] leading-[1.6] text-muted-foreground">{confession.content}</p>
+            <blockquote className="mt-4 border-l-2 border-amber-300/40 pl-4 italic text-[13px] text-muted-foreground">"{confession.scripture}"</blockquote>
+          </div>
+
+          <div className="rounded-[1.25rem] bg-secondary/60 border border-border/50 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-[12px] font-mono"><span>{formatTime(currentTime)}</span><div className="flex-1 h-1 rounded-full bg-border overflow-hidden"><div className="h-full bg-foreground" style={{ width: `${(currentTime/duration)*100}%` }} /></div><span>{formatTime(duration)}</span></div>
+            <div className="flex items-center justify-center gap-3">
+              <Button variant="ghost" size="icon" className="rounded-full w-9 h-9"><SkipBack className="w-4 h-4" /></Button>
+              <Button onClick={togglePlay} className="rounded-full w-12 h-12 bg-foreground text-background">{isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}</Button>
+              <Button variant="ghost" size="icon" className="rounded-full w-9 h-9"><SkipForward className="w-4 h-4" /></Button>
+            </div>
+          </div>
+
+          <Button className={`w-full rounded-full h-11 font-[600] gap-2 ${completed.includes('confession') ? 'bg-emerald-600 hover:bg-emerald-600' : 'bg-foreground text-background'}`} onClick={()=>markCompleted('confession')}>
+            {completed.includes('confession') ? <><Check className="w-4 h-4" /> Completed</> : 'Mark as completed'}
+          </Button>
+        </motion.div>
+
+        {/* ROR */}
+        <motion.div initial={{ y: 16, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="rounded-[1.75rem] border border-border/50 bg-card p-7 space-y-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-secondary border border-border/50 flex items-center justify-center"><BookOpen className="w-5 h-5" /></div>
+              <div>
+                <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted-foreground">{ror.date}</div>
+                <div className="font-[650] text-[13px]">Rhapsody of Realities</div>
+              </div>
+            </div>
+            <Badge variant="secondary" className="rounded-full font-mono text-[10px] uppercase">{ror.theme}</Badge>
+          </div>
+
+          <div>
+            <h3 className="font-display text-[1.6rem] leading-[0.95] tracking-[-0.02em]">{ror.title}</h3>
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-muted-foreground">{ror.scriptureRef}</p>
+            <p className="mt-3 text-[14px] leading-[1.6] text-muted-foreground line-clamp-4">{ror.content}</p>
+            <div className="mt-4 p-4 rounded-[1rem] bg-secondary/50 border border-border/50">
+              <div className="font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground mb-2">Prayer</div>
+              <p className="text-[13px] leading-[1.5] italic">{ror.prayer}</p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button className={`flex-1 rounded-full h-11 font-[600] gap-2 ${completed.includes('ror') ? 'bg-emerald-600' : 'bg-foreground text-background'}`} onClick={()=>markCompleted('ror')}>
+              {completed.includes('ror') ? <><Check className="w-4 h-4" /> Completed</> : 'Mark completed'}
+            </Button>
+            <Link to="/tools/ror-plan"><Button variant="outline" className="rounded-full h-11 px-5 font-[600]">Plan <ChevronRight className="w-4 h-4 ml-1" /></Button></Link>
+          </div>
+        </motion.div>
+      </div>
+
+      <Link to="/publications" className="block rounded-[1.5rem] border border-border/50 bg-card p-5 flex items-center gap-4 hover:border-foreground/15 hover:shadow-[0_8px_24px_hsl(var(--foreground)/0.06)] transition-all group">
+        <div className="w-12 h-12 rounded-[0.9rem] bg-secondary border border-border/50 flex items-center justify-center group-hover:bg-foreground group-hover:text-background transition-colors"><BookOpen className="w-6 h-6" /></div>
+        <div className="flex-1"><h3 className="font-[650] tracking-[-0.01em]">Publications</h3><p className="text-[13px] text-muted-foreground">PK Magazines & Newsletters</p></div>
+        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+      </Link>
+
+      <audio ref={audioRef} src="/audio/daily-confession.mp3" />
+    </div>
+  );
+}

@@ -1,0 +1,109 @@
+import { apiClient } from '@/lib/api-client';
+import { DailyConfession, RORReading, Publication } from '@/lib/mock-data';
+
+export const toolsService = {
+  async getConfessions(): Promise<DailyConfession[]> {
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.get<{ items: any[] }>('/tools/confessions');
+      return data.items.map((c: any) => ({
+        id: c.id,
+        date: c.date,
+        title: c.title,
+        content: c.content,
+        scripture: c.scripture,
+        scriptureRef: c.scripture_ref || c.scriptureRef,
+      }));
+    }, async () => {
+      const { dailyConfessions } = await import('@/lib/mock-data');
+      return dailyConfessions;
+    });
+  },
+
+  async getConfessionByDate(date: string): Promise<DailyConfession | null> {
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.get<any>(`/tools/confessions?date=${date}`);
+      return {
+        id: data.id,
+        date: data.date,
+        title: data.title,
+        content: data.content,
+        scripture: data.scripture,
+        scriptureRef: data.scripture_ref || data.scriptureRef,
+      };
+    }, async () => {
+      const { dailyConfessions } = await import('@/lib/mock-data');
+      return dailyConfessions.find(c => c.date === date) || dailyConfessions[0] || null;
+    });
+  },
+
+  async getRORReadings(): Promise<RORReading[]> {
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.get<{ items: any[] }>('/tools/ror');
+      return data.items.map((r: any) => ({
+        id: r.id,
+        date: r.date,
+        title: r.title,
+        theme: r.theme,
+        scripture: r.scripture,
+        scriptureRef: r.scripture_ref || r.scriptureRef,
+        content: r.content,
+        prayer: r.prayer,
+        furtherStudy: r.furtherStudy || [],
+        dailyScriptureReading: r.dailyScriptureReading || [],
+      }));
+    }, async () => {
+      const { rorReadings } = await import('@/lib/mock-data');
+      return rorReadings;
+    });
+  },
+
+  async getPublications(): Promise<Publication[]> {
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.get<{ items: any[] }>('/tools/publications');
+      return data.items.map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        type: p.type,
+        cover: p.cover,
+        issueDate: p.issue_date || p.issueDate,
+        pages: p.pages,
+        description: p.description,
+      }));
+    }, async () => {
+      const { publications } = await import('@/lib/mock-data');
+      return publications;
+    });
+  },
+
+  async markComplete(type: 'confession' | 'ror'): Promise<{ streak: number }> {
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.post<{ streak: number }>('/tools/complete', { type });
+      return data;
+    }, async () => {
+      try {
+        const key = 'som_daily_completions';
+        const today = new Date().toISOString().split('T')[0];
+        const stored = JSON.parse(localStorage.getItem(key) || '{}');
+        if (!stored[today]) stored[today] = [];
+        if (!stored[today].includes(type)) stored[today].push(type);
+        localStorage.setItem(key, JSON.stringify(stored));
+      } catch {}
+      return { streak: Math.floor(Math.random()*20)+1 };
+    });
+  },
+
+  async getStreak(): Promise<{ streak: number; todayCompleted: string[] }> {
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.get<{ streak: number; todayCompleted: string[] }>('/tools/streak');
+      return data;
+    }, async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const stored = JSON.parse(localStorage.getItem('som_daily_completions') || '{}');
+        return { streak: 5, todayCompleted: stored[today] || [] };
+      } catch {
+        return { streak: 0, todayCompleted: [] };
+      }
+    });
+  },
+};

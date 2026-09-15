@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole, currentUser } from '@/lib/mock-data';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { User, UserRole } from '@/lib/mock-data';
 import { hasPermission as checkPermission, hasAnyPermission as checkAnyPermission, canAccessRoute as checkRouteAccess, canAccessContent as checkContentAccess, Permission } from '@/lib/permissions';
 import {
   login as authLogin,
@@ -21,81 +21,82 @@ interface AuthContextType {
   hasAnyPermission: (permissions: Permission[]) => boolean;
   canAccessRoute: (route: string) => boolean;
   canAccessContent: (isPremium: boolean) => boolean;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(currentUser); // Start with mock user for demo
-  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Check auth state on mount
   useEffect(() => {
-    const checkAuthState = () => {
-      const currentUser = getCurrentUser();
-      if (currentUser) {
-        setUser(currentUser);
-      }
+    // Load persisted user on mount — happy path, always have a user if previously logged in
+    const load = () => {
+      try {
+        const current = getCurrentUser();
+        if (current) setUser(current);
+      } catch {}
+      setIsLoading(false);
     };
-    
-    checkAuthState();
+    // Small delay for premium loading feel
+    const t = setTimeout(load, 300);
+    return () => clearTimeout(t);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const { user, token } = await authLogin(email, password);
+      const { user } = await authLogin(email, password);
       setUser(user);
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const register = async (email: string, password: string, name: string) => {
+  const register = useCallback(async (email: string, password: string, name: string) => {
     setIsLoading(true);
     try {
-      const { user, token } = await authRegister(email, password, name);
+      const { user } = await authRegister(email, password, name);
       setUser(user);
-    } catch (error) {
-      console.error('Registration failed:', error);
-      throw error;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     authLogout();
     setUser(null);
-  };
+  }, []);
 
-  const hasRole = (roles: UserRole[]) => {
+  const updateUser = useCallback((updates: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : prev);
+  }, []);
+
+  const hasRole = useCallback((roles: UserRole[]) => {
     if (!user) return false;
     return roles.includes(user.role);
-  };
+  }, [user]);
 
-  const hasPermission = (permission: Permission) => {
+  const hasPermission = useCallback((permission: Permission) => {
     if (!user) return false;
     return checkPermission(user.role, permission);
-  };
+  }, [user]);
 
-  const hasAnyPermission = (permissions: Permission[]) => {
+  const hasAnyPermission = useCallback((permissions: Permission[]) => {
     if (!user) return false;
     return checkAnyPermission(user.role, permissions);
-  };
+  }, [user]);
 
-  const canAccessRoute = (route: string) => {
+  const canAccessRoute = useCallback((route: string) => {
     if (!user) return false;
     return checkRouteAccess(user.role, route);
-  };
+  }, [user]);
 
-  const canAccessContent = (isPremium: boolean) => {
+  const canAccessContent = useCallback((isPremium: boolean) => {
     if (!user) return false;
     return checkContentAccess(user.role, isPremium);
-  };
+  }, [user]);
 
   return (
     <AuthContext.Provider
@@ -111,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasAnyPermission,
         canAccessRoute,
         canAccessContent,
+        updateUser,
       }}
     >
       {children}

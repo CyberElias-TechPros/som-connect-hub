@@ -1,4 +1,5 @@
 import { ContentItem, currentUser } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
 
 interface FavoriteItem {
   contentId: string;
@@ -8,33 +9,50 @@ interface FavoriteItem {
 
 class FavoritesService {
   private favorites: FavoriteItem[];
+  private initialized = false;
 
   constructor() {
     this.favorites = [];
     this.initialize();
   }
 
-  // Initialize with some default favorites
+  // Initialize with some default favorites + localStorage
   initialize(): void {
+    if (this.initialized) return;
+    this.initialized = true;
     const defaultFavorites: FavoriteItem[] = [
-      {
-        contentId: '1',
-        addedAt: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-        notes: 'Powerful teaching on faith',
-      },
-      {
-        contentId: '3',
-        addedAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-        notes: 'Great worship teaching',
-      },
-      {
-        contentId: '20',
-        addedAt: new Date(Date.now() - 259200000).toISOString(), // 3 days ago
-        notes: 'Inspiring behind the scenes',
-      },
+      { contentId: '1', addedAt: new Date(Date.now() - 86400000).toISOString(), notes: 'Powerful teaching on faith' },
+      { contentId: '3', addedAt: new Date(Date.now() - 172800000).toISOString(), notes: 'Great worship teaching' },
+      { contentId: '20', addedAt: new Date(Date.now() - 259200000).toISOString(), notes: 'Inspiring behind the scenes' },
     ];
-    
-    this.favorites = defaultFavorites;
+    try {
+      const stored = localStorage.getItem('som_favorites');
+      if (stored) this.favorites = JSON.parse(stored);
+      else this.favorites = defaultFavorites;
+    } catch {
+      this.favorites = defaultFavorites;
+    }
+    // Try to sync from API if available
+    this.syncFromApi().catch(()=>{});
+  }
+
+  private persist() {
+    try { localStorage.setItem('som_favorites', JSON.stringify(this.favorites)); } catch {}
+  }
+
+  private async syncFromApi() {
+    if (!apiClient.hasApi) return;
+    try {
+      const data = await apiClient.get<{ items: any[] }>('/favorites');
+      if (data.items?.length) {
+        this.favorites = data.items.map((r: any) => ({
+          contentId: r.content_id || r.contentId,
+          addedAt: r.added_at || r.addedAt,
+          notes: r.notes,
+        }));
+        this.persist();
+      }
+    } catch {}
   }
 
   // Get all favorites
@@ -44,19 +62,22 @@ class FavoritesService {
 
   // Add to favorites
   addToFavorites(contentId: string, notes?: string): FavoriteItem {
-    // Check if already favorited
     const existing = this.favorites.find(fav => fav.contentId === contentId);
-    if (existing) {
-      return existing; // Already favorited
-    }
+    if (existing) return existing;
 
     const newFavorite: FavoriteItem = {
       contentId,
       addedAt: new Date().toISOString(),
       notes,
     };
-    
     this.favorites.push(newFavorite);
+    this.persist();
+
+    // API fire-and-forget
+    if (apiClient.hasApi) {
+      apiClient.post('/favorites', { contentId, notes }).catch(()=>{});
+    }
+
     return newFavorite;
   }
 
@@ -65,44 +86,46 @@ class FavoritesService {
     const index = this.favorites.findIndex(fav => fav.contentId === contentId);
     if (index !== -1) {
       this.favorites.splice(index, 1);
+      this.persist();
+      if (apiClient.hasApi) {
+        apiClient.delete(`/favorites/${contentId}`).catch(()=>{});
+      }
       return true;
     }
     return false;
   }
 
-  // Check if content is favorited
   isFavorited(contentId: string): boolean {
     return this.favorites.some(fav => fav.contentId === contentId);
   }
 
-  // Get favorite by content ID
   getFavorite(contentId: string): FavoriteItem | undefined {
     return this.favorites.find(fav => fav.contentId === contentId);
   }
 
-  // Update favorite notes
   updateFavoriteNotes(contentId: string, notes: string): FavoriteItem | undefined {
     const favorite = this.getFavorite(contentId);
     if (favorite) {
       favorite.notes = notes;
+      this.persist();
+      if (apiClient.hasApi) {
+        apiClient.post('/favorites', { contentId, notes }).catch(()=>{});
+      }
       return favorite;
     }
     return undefined;
   }
 
-  // Get favorites count
   getFavoritesCount(): number {
     return this.favorites.length;
   }
 
-  // Get recently added favorites
   getRecentFavorites(limit: number = 10): FavoriteItem[] {
     return [...this.favorites]
       .sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime())
       .slice(0, limit);
   }
 
-  // Get favorites with content details
   getFavoritesWithContent(allContent: ContentItem[]): (FavoriteItem & { content: ContentItem })[] {
     return this.favorites
       .map(favorite => {
@@ -112,12 +135,14 @@ class FavoritesService {
       .filter(Boolean) as (FavoriteItem & { content: ContentItem })[];
   }
 
-  // Clear all favorites
   clearAllFavorites(): void {
     this.favorites = [];
+    this.persist();
+    if (apiClient.hasApi) {
+      apiClient.delete('/favorites').catch(()=>{});
+    }
   }
 
-  // Search favorites
   searchFavorites(query: string, allContent: ContentItem[]): (FavoriteItem & { content: ContentItem })[] {
     const lowerQuery = query.toLowerCase();
     return this.getFavoritesWithContent(allContent)
@@ -128,29 +153,25 @@ class FavoritesService {
       );
   }
 
-  // Get favorites by category
   getFavoritesByCategory(category: string, allContent: ContentItem[]): (FavoriteItem & { content: ContentItem })[] {
     return this.getFavoritesWithContent(allContent)
       .filter(item => item.content.category === category);
   }
 
-  // Get favorites by speaker
   getFavoritesBySpeaker(speakerId: string, allContent: ContentItem[]): (FavoriteItem & { content: ContentItem })[] {
     return this.getFavoritesWithContent(allContent)
       .filter(item => item.content.speaker.id === speakerId);
   }
 
-  // Export favorites (for backup)
   exportFavorites(): FavoriteItem[] {
     return this.favorites;
   }
 
-  // Import favorites (for restore)
   importFavorites(favorites: FavoriteItem[]): void {
     this.favorites = favorites;
+    this.persist();
   }
 
-  // Get favorites statistics
   getFavoritesStats(allContent: ContentItem[]): {
     total: number;
     byCategory: Record<string, number>;
@@ -158,12 +179,10 @@ class FavoritesService {
   } {
     const byCategory: Record<string, number> = {};
     const bySpeaker: Record<string, number> = {};
-    
     this.getFavoritesWithContent(allContent).forEach(item => {
       byCategory[item.content.category] = (byCategory[item.content.category] || 0) + 1;
       bySpeaker[item.content.speaker.name] = (bySpeaker[item.content.speaker.name] || 0) + 1;
     });
-    
     return {
       total: this.favorites.length,
       byCategory,

@@ -1,212 +1,55 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Download, Trash2, Play, Pause, Settings, AlertTriangle } from 'lucide-react';
-import { useOffline } from '@/hooks/use-offline';
-import { conferences, podcasts, originals, playlists, publications } from '@/lib/mock-data';
+import { Download, Trash2, HardDrive, Wifi, Sparkles, Play } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function Offline() {
-  const {
-    cachedItems,
-    storageUsed,
-    storageLimit,
-    autoDownloadEnabled,
-    toggleAutoDownload,
-    removeCachedItem,
-    cacheItem,
-    clearAllCache,
-    getStorageUsagePercentage,
-    getAvailableStorage,
-    getCachedContent,
-    getCachedPlaylists,
-    getCachedPublications,
-    simulateDownloadProgress,
-  } = useOffline();
+  const [items, setItems] = useState([
+    { id: '1', title: 'The Power of Faith in Action', size: '1.2 GB', thumb: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=600&h=340&fit=crop' },
+    { id: '2', title: 'Daily Inspiration Podcast - Episode 145', size: '84 MB', thumb: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600&h=340&fit=crop' },
+  ]);
 
-  const [downloadingItems, setDownloadingItems] = useState<{id: string, progress: number}[]>([]);
-  const [activeDownloads, setActiveDownloads] = useState<Set<string>>(new Set());
-  const allContent = [...conferences, ...podcasts, ...originals];
-  const availableContent = allContent.filter(c => !cachedItems.some(item => item.id === c.id));
-
-  const deleteDownload = (id: string) => {
-    removeCachedItem(id);
-  };
-
-  const startDownload = (id: string) => {
-    const content = allContent.find(c => c.id === id);
-    if (content) {
-      setActiveDownloads(prev => new Set(prev).add(id));
-      
-      simulateDownloadProgress(id, (progress) => {
-        setDownloadingItems(prev => {
-          const existingIndex = prev.findIndex(item => item.id === id);
-          if (existingIndex !== -1) {
-            return prev.map(item =>
-              item.id === id ? { ...item, progress } : item
-            );
-          } else {
-            return [...prev, { id, progress }];
-          }
-        });
-        
-        if (progress === 100) {
-          // Cache the item when download completes
-          cacheItem(content).then(() => {
-            setActiveDownloads(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(id);
-              return newSet;
-            });
-            setDownloadingItems(prev => prev.filter(item => item.id !== id));
-          });
-        }
-      });
-    }
-  };
-
-  function setOfflineEnabled(checked: boolean): void {
-    throw new Error('Function not implemented.');
-  }
+  const clear = (id: string) => setItems(items.filter(i=>i.id!==id));
+  const clearAll = () => setItems([]);
 
   return (
-    <div className="space-y-6 p-4 md:p-0">
-      <h1 className="text-2xl font-bold">Offline Manager</h1>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Offline Availability
-            <Switch checked={setOfflineEnabled} onCheckedChange={setOfflineEnabled} />
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
-            Enable offline mode to download content for offline viewing. Premium subscribers can download unlimited content.
-          </p>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Storage Used</span>
-                <span>{storageUsed} MB / {storageLimit} MB</span>
-              </div>
-              <Progress value={getStorageUsagePercentage()} className="w-full" />
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Available Storage</span>
-              <span>{getAvailableStorage()} MB available</span>
-            </div>
-            {getStorageUsagePercentage() > 90 && (
-              <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-400">
-                <AlertTriangle className="h-4 w-4" />
-                <span>Storage almost full! Consider clearing some downloads.</span>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Downloaded Content ({getCachedContent().length})</h2>
-          {getCachedContent().length > 0 && (
-            <Button variant="outline" size="sm" onClick={clearAllCache} className="gap-2">
-              <Trash2 className="h-4 w-4" />
-              Clear All
-            </Button>
-          )}
+    <div className="space-y-8 max-w-[800px] mx-auto">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-3"><span className="px-2.5 py-1 rounded-full bg-foreground text-background font-mono text-[10px] tracking-[0.15em] uppercase">Offline • {items.length} items</span><span className="font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground flex items-center gap-1"><HardDrive className="w-3 h-3" /> Local storage</span></div>
+          <h1 className="font-display text-[2.2rem] md:text-[3rem] leading-[0.9] tracking-[-0.03em]">Watch <span className="italic font-[300] text-muted-foreground">anywhere.</span></h1>
         </div>
-        {getCachedContent().length === 0 ? (
-          <p className="text-center text-muted-foreground">No downloaded content</p>
-        ) : (
-          getCachedContent().map(content => (
-            <Card key={content.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <img src={content.thumbnail} alt={content.title} className="w-16 h-16 object-cover rounded" />
-                  <div className="flex-1">
-                    <h3 className="font-medium">{content.title}</h3>
-                    <p className="text-sm text-muted-foreground">{content.speaker.name}</p>
-                    <p className="text-xs text-muted-foreground">{content.duration}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">Downloaded</Badge>
-                    <Button variant="outline" size="sm">
-                      <Play className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => deleteDownload(content.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+        {items.length>0 && <Button variant="outline" className="rounded-full h-10 px-5 font-[600] gap-1" onClick={clearAll}><Trash2 className="w-4 h-4" /> Clear all</Button>}
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-3">
+        <Card className="rounded-[1.25rem] border-border/50 bg-card p-5 flex gap-3"><div className="w-10 h-10 rounded-full bg-secondary border border-border/50 flex items-center justify-center"><HardDrive className="w-5 h-5" /></div><div><div className="font-[650] text-[14px]">1.28 GB used</div><div className="text-[12px] text-muted-foreground">of 10 GB available</div></div></Card>
+        <Card className="rounded-[1.25rem] border-border/50 bg-card p-5 flex gap-3"><div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center"><Wifi className="w-5 h-5 text-emerald-600" /></div><div><div className="font-[650] text-[14px]">Wi-Fi only</div><div className="text-[12px] text-muted-foreground">Downloads on Wi-Fi</div></div></Card>
+        <Card className="rounded-[1.25rem] border-border/50 bg-foreground text-background p-5 flex gap-3"><div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Sparkles className="w-5 h-5 text-amber-300" /></div><div><div className="font-[650] text-[14px]">Auto-download on</div><div className="text-[12px] text-background/60">Favorites saved offline</div></div></Card>
+      </div>
+
+      <div className="space-y-3">
+        {items.map((it,i)=>(
+          <motion.div key={it.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.05 }}>
+            <Card className="rounded-[1.25rem] border-border/50 overflow-hidden flex">
+              <div className="w-28 aspect-video relative shrink-0"><img src={it.thumb} alt={it.title} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/20" /><div className="absolute inset-0 flex items-center justify-center"><div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center"><Play className="w-4 h-4 fill-black text-black ml-0.5" /></div></div></div>
+              <CardContent className="flex-1 p-4 flex items-center justify-between">
+                <div><div className="font-[600] text-[14px] leading-[1.2] line-clamp-1">{it.title}</div><div className="text-[12px] text-muted-foreground mt-1">{it.size} • Available offline</div></div>
+                <Button variant="ghost" size="icon" className="rounded-full w-9 h-9" onClick={()=>clear(it.id)}><Trash2 className="w-4 h-4" /></Button>
               </CardContent>
             </Card>
-          ))
-        )}
-      </div>
-
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Downloading ({downloadingItems.length})</h2>
-        {downloadingItems.length === 0 ? (
-          <p className="text-center text-muted-foreground">No active downloads</p>
-        ) : (
-          downloadingItems.map(download => {
-            const content = allContent.find(c => c.id === download.id);
-            if (!content) return null;
-            
-            return (
-              <Card key={download.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
-                    <img src={content.thumbnail} alt={content.title} className="w-16 h-16 object-cover rounded" />
-                    <div className="flex-1">
-                      <h3 className="font-medium">{content.title}</h3>
-                      <p className="text-sm text-muted-foreground">{content.speaker.name}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Progress value={download.progress} className="flex-1" />
-                        <span className="text-xs">{download.progress}%</span>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" disabled={true}>
-                      <Pause className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
-      </div>
-
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Available for Download</h2>
-        {availableContent.slice(0, 5).map(content => (
-          <Card key={content.id}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-4">
-                <img src={content.thumbnail} alt={content.title} className="w-16 h-16 object-cover rounded" />
-                <div className="flex-1">
-                  <h3 className="font-medium">{content.title}</h3>
-                  <p className="text-sm text-muted-foreground">{content.speaker.name}</p>
-                  <p className="text-xs text-muted-foreground">{content.duration}</p>
-                </div>
-                <Button
-                  onClick={() => startDownload(content.id)}
-                  disabled={activeDownloads.has(content.id) || getAvailableStorage() < 10}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  {activeDownloads.has(content.id) ? 'Queued' : 'Download'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          </motion.div>
         ))}
-        {availableContent.length === 0 && (
-          <p className="text-center text-muted-foreground">All available content has been downloaded</p>
-        )}
       </div>
+
+      {items.length===0 && (
+        <div className="py-20 text-center rounded-[1.75rem] border border-dashed border-border/60 bg-secondary/20 space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-full bg-card border border-border/50 flex items-center justify-center"><Download className="w-6 h-6 text-muted-foreground" /></div>
+          <h3 className="font-display text-[1.4rem]">No offline content</h3>
+          <p className="text-[13px] text-muted-foreground max-w-[36ch] mx-auto">Download teachings from the library to watch without internet. Happy path — downloads always succeed in demo.</p>
+        </div>
+      )}
     </div>
   );
 }
