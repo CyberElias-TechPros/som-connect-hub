@@ -23,13 +23,17 @@ export default function Player() {
   const [playing, setPlaying] = useState(true);
   const [progress, setProgress] = useState(12);
   // Report playback position back to the Worker (best effort, never blocks UI).
+  // `progress` ticks every 100ms, so read it from a ref: putting it in the deps
+  // would tear the 15s interval down before it ever fires.
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
   useEffect(() => {
     if (!content?.id) return;
     const timer = setInterval(() => {
-      contentService.syncProgress(content.id, Math.round(progress), 0).catch(() => undefined);
+      contentService.syncProgress(content.id, Math.round(progressRef.current), 0).catch(() => undefined);
     }, 15000);
     return () => clearInterval(timer);
-  }, [content?.id, progress]);
+  }, [content?.id]);
 
   const [volume, setVolume] = useState(80);
   const [muted, setMuted] = useState(false);

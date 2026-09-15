@@ -211,6 +211,7 @@ const ROUTES = [
   { path: '/community', label: 'community', live: [smokePost] },
   { path: '/qa', label: 'qa sessions', live: ['Q&A Session'] },
   { path: '/qa/1', label: 'qa session', live: ['Question'] },
+  { path: '/player/1', label: 'player', live: ['The Power of Faith in Action'], anon: true },
   { path: '/favorites', label: 'favorites', live: ['Worship Night Highlights'], role: 'member' },
   { path: '/playlists', label: 'playlists', live: ['My Faith Journey'], role: 'member' },
   { path: '/profile', label: 'profile', live: ['David'], role: 'member' },
