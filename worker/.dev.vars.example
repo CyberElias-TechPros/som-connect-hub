@@ -1,3 +1,23 @@
-JWT_SECRET=local-dev-secret-change-me-to-32+chars
+# ---------------------------------------------------------------------------
+# Local secrets for `wrangler dev` (git-ignored). Copy from .dev.vars.example.
+# ---------------------------------------------------------------------------
+
+# Secret used to sign HS256 JWTs. 32+ characters. In production set it with
+# `npx wrangler secret put JWT_SECRET`.
+JWT_SECRET=local-dev-secret-change-me-to-32-chars-long
+
+# Base URL of the frontend (used for CORS + links in emails/notifications).
 FRONTEND_URL=http://localhost:8080
+
 ENV=development
+
+# Permissive CORS for preview hosts (Arena previews, LAN, tunnels).
+ALLOW_ALL_ORIGINS=true
+
+# Happy path: unknown emails are provisioned on sign-in and the seeded demo
+# passwords always work. Set to "true" for conventional strict auth.
+STRICT_AUTH=false
+
+# Public base URL for R2 objects (custom domain / r2.dev). Leave empty to serve
+# media through the worker at /uploads/file/<key>.
+# R2_PUBLIC_BASE_URL=

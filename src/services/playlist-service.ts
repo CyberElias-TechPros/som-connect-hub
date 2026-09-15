@@ -59,11 +59,15 @@ class PlaylistService {
     try { localStorage.setItem('som_playlists', JSON.stringify(this.playlists)); } catch {}
   }
 
-  private async syncFromApi() {
-    if (!apiClient.hasApi) return;
+  /** Pull playlists from the Worker (source of truth when signed in). */
+  async sync(): Promise<UserPlaylist[]> {
+    return this.syncFromApi();
+  }
+
+  private async syncFromApi(): Promise<UserPlaylist[]> {
     try {
       const data = await apiClient.get<{ items: any[] }>('/playlists');
-      if (data.items?.length) {
+      if (Array.isArray(data?.items)) {
         this.playlists = data.items.map((p: any) => ({
           id: p.id,
           name: p.name,
@@ -78,7 +82,10 @@ class PlaylistService {
         }));
         this.persist();
       }
-    } catch {}
+    } catch {
+      /* offline — keep local copy */
+    }
+    return this.playlists;
   }
 
   getUserPlaylists(): UserPlaylist[] {

@@ -290,6 +290,26 @@ See `worker/README.md` for full details.
 - [x] Settings theme toggle persists
 - [x] 404 → home
 
+### Automated verification
+
+Three suites run against a live Worker (`cd worker && npm run dev` + `npm run dev` in another terminal).
+Start both, then:
+
+```bash
+node scripts/api-contract.mjs    # 91 checks — every API path the services call
+node scripts/frontend-smoke.mjs  # 41 checks — real services → real Worker journeys
+node scripts/page-smoke.mjs      # 31 checks — every route rendered in jsdom with live D1 data
+```
+
+| Suite | What it proves |
+| --- | --- |
+| `scripts/api-contract.mjs` | All 91 endpoints referenced by `src/services/*` exist on the Worker (no 5xx, no missing route), signed in as member / pastor / admin. |
+| `scripts/frontend-smoke.mjs` | The real service layer (Vite `ssrLoadModule`) completes auth, content, favorites, playlists, community, Q&A, tools, payments, uploads, admin journeys against D1. |
+| `scripts/page-smoke.mjs` | Every route in `src/App.tsx` renders without tripping the ErrorBoundary **and** shows live D1 rows (not just bundled mock data). |
+
+Options: `--api=http://host:port` (target a non-default Worker), `--verbose` (contract suite),
+`--only=/library` and `--settle=ms` (page suite).
+
 **Builds:** `npm run build` (frontend) and `npx tsc --noEmit` (worker) pass.
 
 ---

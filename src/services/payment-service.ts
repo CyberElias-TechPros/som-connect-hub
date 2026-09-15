@@ -65,17 +65,31 @@ const mockBillingInfo: BillingInfo = {
 
 export const PaymentService = {
   async getPaymentMethods(): Promise<PaymentMethod[]> {
-    return new Promise((resolve) => { setTimeout(() => resolve(mockPaymentMethods), 300); });
+    return apiClient.tryApi(
+      async () => (await apiClient.get<{ items: PaymentMethod[] }>('/payments/methods')).items,
+      async () => mockPaymentMethods,
+      { label: 'payment methods' },
+    );
   },
 
-  async addPaymentMethod(paymentMethod: Omit<PaymentMethod, 'id'>): Promise<PaymentMethod> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const newMethod = { ...paymentMethod, id: `pm_${Date.now()}` };
+  async addPaymentMethod(paymentMethod: Omit<PaymentMethod, 'id'> & { cardNumber?: string; cvc?: string }): Promise<PaymentMethod> {
+    return apiClient.tryApi(
+      async () => (await apiClient.post<{ method: PaymentMethod }>('/payments/methods', paymentMethod)).method,
+      async () => {
+        const newMethod = { ...paymentMethod, id: `pm_${Date.now()}` } as PaymentMethod;
         mockPaymentMethods.push(newMethod);
-        resolve(newMethod);
-      }, 300);
-    });
+        return newMethod;
+      },
+      { label: 'add payment method' },
+    );
+  },
+
+  async removePaymentMethod(id: string): Promise<void> {
+    await apiClient.delete(`/payments/methods/${id}`);
+  },
+
+  async setDefaultPaymentMethod(id: string): Promise<void> {
+    await apiClient.put(`/payments/methods/${id}/default`, {});
   },
 
   async getCurrentSubscription(): Promise<Subscription | null> {
@@ -132,71 +146,100 @@ export const PaymentService = {
     return this.createSubscription(newPlanId, 'pm_123');
   },
 
-  async cancelSubscription(subscriptionId: string): Promise<Subscription> {
+  async cancelSubscription(subscriptionId?: string): Promise<Subscription> {
     return apiClient.tryApi(async () => {
-      await apiClient.post('/subscriptions/cancel', {});
-      return { ...mockSubscription, status: 'cancelled' as const };
-    }, async () => {
-      return new Promise((resolve) => {
-        setTimeout(() => { resolve({ ...mockSubscription, status: 'cancelled' }); }, 300);
-      });
-    });
+      const data = await apiClient.post<{ subscription: any; status: string }>('/subscriptions/cancel', {});
+      return {
+        id: data.subscription?.id ?? subscriptionId ?? 'sub_current',
+        planId: data.subscription?.planId ?? mockSubscription.planId,
+        status: (data.status === 'cancelled' ? 'cancelled' : 'active') as Subscription['status'],
+        currentPeriodEnd: data.subscription?.currentPeriodEnd ?? mockSubscription.currentPeriodEnd,
+        createdAt: data.subscription?.createdAt ?? mockSubscription.createdAt,
+        paymentMethodId: data.subscription?.paymentMethodId ?? 'pm_123',
+        autoRenew: !!data.subscription?.autoRenew,
+      };
+    }, async () => ({ ...mockSubscription, status: 'cancelled' as const }));
   },
 
-  async createPaymentIntent(amount: number, currency: string = 'USD'): Promise<PaymentIntent> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          id: `pi_${Date.now()}`,
-          amount,
-          currency,
-          status: 'requires_payment_method',
-          clientSecret: `pi_${Date.now()}_secret_${Math.random().toString(36).substring(2, 10)}`,
-          created: Date.now(),
-        });
-      }, 300);
-    });
+  async createPaymentIntent(amount: number, currency: string = 'USD', planId?: string): Promise<PaymentIntent> {
+    return apiClient.tryApi(
+      async () => (await apiClient.post<{ paymentIntent: PaymentIntent }>('/payments/intents', { amount, currency, planId })).paymentIntent,
+      async () => ({
+        id: `pi_${Date.now()}`,
+        amount,
+        currency,
+        status: 'requires_confirmation' as const,
+        clientSecret: `pi_${Date.now()}_secret_${Math.random().toString(36).substring(2, 10)}`,
+        created: Date.now(),
+      }),
+      { label: 'payment intent' },
+    );
   },
 
   async confirmPayment(paymentIntentId: string, paymentMethodId: string): Promise<PaymentIntent> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          id: paymentIntentId,
-          amount: 999,
-          currency: 'USD',
-          status: 'succeeded',
-          clientSecret: `pi_${paymentIntentId}_secret_confirmed`,
-          created: Date.now(),
-        });
-      }, 600);
-    });
+    return apiClient.tryApi(
+      async () =>
+        (await apiClient.post<{ paymentIntent: PaymentIntent }>('/payments/confirm', { paymentIntentId, paymentMethodId })).paymentIntent,
+      async () => ({
+        id: paymentIntentId,
+        amount: 999,
+        currency: 'USD',
+        status: 'succeeded' as const,
+        clientSecret: `pi_${paymentIntentId}_secret_confirmed`,
+        created: Date.now(),
+      }),
+      { label: 'confirm payment' },
+    );
+  },
+
+  /** PUT /subscriptions/me — change plan without leaving the app. */
+  async changePlan(planId: string): Promise<void> {
+    await apiClient.put('/subscriptions/me', { planId });
+  },
+
+  /** POST /subscriptions/resume */
+  async resumeSubscription(): Promise<void> {
+    await apiClient.post('/subscriptions/resume', {});
   },
 
   async getBillingInfo(): Promise<BillingInfo> {
-    return new Promise((resolve) => { setTimeout(() => resolve(mockBillingInfo), 300); });
+    return apiClient.tryApi(
+      async () => (await apiClient.get<{ billingInfo: BillingInfo }>('/payments/billing')).billingInfo,
+      async () => mockBillingInfo,
+      { label: 'billing info' },
+    );
   },
 
   async updateBillingInfo(billingInfo: BillingInfo): Promise<BillingInfo> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
+    return apiClient.tryApi(
+      async () => (await apiClient.put<{ billingInfo: BillingInfo }>('/payments/billing', billingInfo)).billingInfo,
+      async () => {
         Object.assign(mockBillingInfo, billingInfo);
-        resolve(mockBillingInfo);
-      }, 300);
-    });
+        return mockBillingInfo;
+      },
+      { label: 'update billing info' },
+    );
   },
 
   async validatePaymentMethod(cardNumber: string, expiry: string, cvc: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const isValid = cardNumber.length >= 13 && expiry.length === 5 && cvc.length >= 3;
-        resolve(isValid);
-      }, 300);
-    });
+    return apiClient.tryApi(
+      async () => (await apiClient.post<{ valid: boolean }>('/payments/validate', { cardNumber, expiry, cvc })).valid,
+      async () => cardNumber.replace(/\D/g, '').length >= 13 && expiry.length >= 4 && cvc.length >= 3,
+      { label: 'validate card' },
+    );
+  },
+
+  /** GET /payments/history */
+  async getPaymentHistory() {
+    return apiClient.tryApi(
+      async () => (await apiClient.get<{ items: any[] }>('/payments/history')).items,
+      () => [],
+      { label: 'payment history' },
+    );
   },
 
   async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-    return apiClient.tryApi(async () => {
+    return apiClient.tryApi<SubscriptionPlan[]>(async () => {
       const data = await apiClient.get<{ items: any[] }>('/subscriptions/plans');
       return data.items.map((p: any) => ({
         id: p.id,

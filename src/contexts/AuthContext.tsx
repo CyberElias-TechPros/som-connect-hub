@@ -6,6 +6,7 @@ import {
   register as authRegister,
   logout as authLogout,
   getCurrentUser,
+  fetchMe,
   isAuthenticated as checkAuth
 } from '@/services/auth-service';
 
@@ -31,15 +32,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Load persisted user on mount — happy path, always have a user if previously logged in
-    const load = () => {
+    // Restore the persisted session, then confirm it against the Worker
+    // (GET /auth/me). A revoked/expired token signs the user out cleanly.
+    const load = async () => {
       try {
         const current = getCurrentUser();
         if (current) setUser(current);
-      } catch {}
-      setIsLoading(false);
+        if (checkAuth()) {
+          const verified = await fetchMe();
+          if (verified) setUser(verified);
+        }
+      } catch {
+        /* offline — keep the cached user so the app stays usable */
+      } finally {
+        setIsLoading(false);
+      }
     };
-    // Small delay for premium loading feel
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
   }, []);

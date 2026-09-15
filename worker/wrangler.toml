@@ -1,42 +1,97 @@
+# ============================================================================
+# SOM CONNECT — Cloudflare Workers API
+# ----------------------------------------------------------------------------
+# Bindings used by the worker:
+#   DB        D1   relational data (schema + seed in ./migrations)
+#   STORAGE   R2   video, audio, publications, avatars
+#   CACHE     KV   rate limiting, cache markers, session data
+#   QUEUE     Queues producers/consumers for background fan-out
+#   QA_SESSION Durable Object per live Q&A session
+#   assets    optional static hosting of the built SPA (see bottom of file)
+#
+# Quick start (local):
+#   npm install
+#   npm run db:build        # regenerate migrations + runtime SQL
+#   npm run db:migrate:local && npm run db:seed:local
+#   npm run dev             # http://localhost:8787
+#
+# First deploy:
+#   npx wrangler login
+#   npx wrangler d1 create som-connect-db            # copy database_id below
+#   npx wrangler r2 bucket create som-connect-storage
+#   npx wrangler kv namespace create CACHE           # copy id below
+#   npx wrangler queues create som-connect-jobs
+#   npx wrangler secret put JWT_SECRET
+#   npm run db:migrate:remote
+#   npm run deploy
+# ============================================================================
 name = "som-connect-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-27"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
 
-# Development
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+[dev]
+port = 8787
+local_protocol = "http"
+inspector_port = 9229
+
+# ---------------------------------------------------------------------------
+# Variables (non-secret). Secrets: JWT_SECRET (and any email/PSP keys).
+# ---------------------------------------------------------------------------
 [vars]
 ENV = "development"
-JWT_SECRET = "som-connect-dev-secret-change-in-prod"
+APP_NAME = "SOM CONNECT API"
+APP_VERSION = "1.0.0"
 FRONTEND_URL = "http://localhost:8080"
+# Comma separated extra origins allowed by CORS.
+ALLOWED_ORIGINS = ""
+# Demo default: permissive CORS so preview hosts and Pages deployments work.
+# Set to "false" in production once ALLOWED_ORIGINS is populated.
+ALLOW_ALL_ORIGINS = "true"
+# Happy path (default): unknown emails are provisioned on sign-in and demo
+# seeded passwords always work. Set to "true" for conventional strict auth.
+STRICT_AUTH = "false"
+# Public base URL for R2 objects (custom domain or r2.dev endpoint). Leave
+# empty to stream media through the worker at /uploads/file/<key>.
+R2_PUBLIC_BASE_URL = ""
 
-# D1 Database
+# ---------------------------------------------------------------------------
+# Bindings
+# ---------------------------------------------------------------------------
 [[d1_databases]]
 binding = "DB"
 database_name = "som-connect-db"
+# Replace with the id printed by `wrangler d1 create som-connect-db`.
 database_id = "local-som-connect-db"
+migrations_dir = "migrations"
 
-# R2 Bucket for storage (videos, thumbnails, avatars, publications)
 [[r2_buckets]]
 binding = "STORAGE"
 bucket_name = "som-connect-storage"
+# Uncomment once a custom domain / r2.dev endpoint is attached to the bucket.
+# preview_bucket_name = "som-connect-storage-preview"
 
-# KV Namespace for cache and config
 [[kv_namespaces]]
 binding = "CACHE"
 id = "local-cache-id"
 preview_id = "local-cache-preview-id"
 
-# Queue for background jobs (notifications, transcoding, emails)
 [[queues.producers]]
 binding = "QUEUE"
-queue = "som-connect-queue"
+queue = "som-connect-jobs"
 
 [[queues.consumers]]
-queue = "som-connect-queue"
+queue = "som-connect-jobs"
 max_batch_size = 10
 max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "som-connect-jobs-dlq"
 
-# Durable Object for live Q&A coordination
 [[durable_objects.bindings]]
 name = "QA_SESSION"
 class_name = "QASessionDurableObject"
@@ -45,15 +100,100 @@ class_name = "QASessionDurableObject"
 tag = "v1"
 new_classes = ["QASessionDurableObject"]
 
-# Cron for daily tasks
+# Daily housekeeping: devotionals, reminders, expiry, cache warmup (00:05 UTC).
 [triggers]
-crons = ["0 0 * * *"] # Daily at midnight UTC
+crons = ["5 0 * * *"]
 
-# Routes for production (uncomment when deploying)
+[env.staging]
+name = "som-connect-api-staging"
+
+[env.staging.vars]
+ENV = "staging"
+APP_NAME = "SOM CONNECT API (staging)"
+APP_VERSION = "1.0.0"
+FRONTEND_URL = "https://staging.som-connect.pages.dev"
+ALLOWED_ORIGINS = ""
+ALLOW_ALL_ORIGINS = "true"
+STRICT_AUTH = "false"
+R2_PUBLIC_BASE_URL = ""
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "som-connect-db-staging"
+database_id = "replace-with-staging-d1-id"
+migrations_dir = "migrations"
+
+[[env.staging.r2_buckets]]
+binding = "STORAGE"
+bucket_name = "som-connect-storage-staging"
+
+[[env.staging.kv_namespaces]]
+binding = "CACHE"
+id = "replace-with-staging-kv-id"
+
+[[env.staging.queues.producers]]
+binding = "QUEUE"
+queue = "som-connect-jobs-staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "QA_SESSION"
+class_name = "QASessionDurableObject"
+
+# ---------------------------------------------------------------------------
+# Production environment. Deploy with: npm run deploy  (--env production)
+# ---------------------------------------------------------------------------
+[env.production]
+name = "som-connect-api"
+routes = [
+  # Attach a custom domain (requires the zone in this account):
+  #{ pattern = "api.som-connect.com", custom_domain = true },
+]
+
+[env.production.vars]
+ENV = "production"
+APP_NAME = "SOM CONNECT API"
+APP_VERSION = "1.0.0"
+FRONTEND_URL = "https://som-connect.pages.dev"
+ALLOWED_ORIGINS = "https://app.som-connect.com,https://som-connect.pages.dev"
+ALLOW_ALL_ORIGINS = "false"
+STRICT_AUTH = "true"
+# Set to your CDN domain (e.g. https://cdn.som-connect.com) after attaching one
+# to the R2 bucket; otherwise media streams through /uploads/file/<key>.
+R2_PUBLIC_BASE_URL = ""
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "som-connect-db-prod"
+database_id = "replace-with-production-d1-id"
+migrations_dir = "migrations"
+
+[[env.production.r2_buckets]]
+binding = "STORAGE"
+bucket_name = "som-connect-storage-prod"
+
+[[env.production.kv_namespaces]]
+binding = "CACHE"
+id = "replace-with-production-kv-id"
+
+[[env.production.queues.producers]]
+binding = "QUEUE"
+queue = "som-connect-jobs-prod"
+
+# ---------------------------------------------------------------------------
+# Optional: serve the built SPA straight from this Worker
+# (uncomment after `npm run build` in the repo root and set the repo root as
+# the wrangler working directory, or point the path at ../dist).
+#
+# [assets]
+# directory = "../dist"
+# binding = "ASSETS"
+# not_found_handling = "single-page-application"
+# run_worker_first = ["/api/*"]
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Optional custom domains
+# ---------------------------------------------------------------------------
 # [[routes]]
-# pattern = "api.som-connect.com/*"
-# zone_name = "som-connect.com"
-
-# For local dev, allow all origins
-[dev]
-port = 8787
+# pattern = "api.som-connect.com"
+# custom_domain = true

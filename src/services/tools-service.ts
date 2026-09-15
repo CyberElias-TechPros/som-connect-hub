@@ -2,6 +2,71 @@ import { apiClient } from '@/lib/api-client';
 import { DailyConfession, RORReading, Publication } from '@/lib/mock-data';
 
 export const toolsService = {
+  /** GET /tools/bundle — today's devotionals + streak in one call. */
+  async getBundle(): Promise<{
+    date: string;
+    confession: DailyConfession | null;
+    ror: RORReading | null;
+    streak: number;
+    completed: string[];
+  }> {
+    const fallback = async () => ({
+      date: new Date().toISOString().split('T')[0],
+      confession: (await import('@/lib/mock-data')).dailyConfessions[0] ?? null,
+      ror: (await import('@/lib/mock-data')).rorReadings[0] ?? null,
+      streak: 5,
+      completed: [] as string[],
+    });
+
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.get<any>('/tools/bundle');
+      return {
+        date: data.date,
+        confession: data.confession
+          ? {
+              id: data.confession.id,
+              date: data.confession.date,
+              title: data.confession.title,
+              content: data.confession.content,
+              scripture: data.confession.scripture,
+              scriptureRef: data.confession.scriptureRef,
+            }
+          : null,
+        ror: data.ror
+          ? {
+              id: data.ror.id,
+              date: data.ror.date,
+              title: data.ror.title,
+              theme: data.ror.theme,
+              scripture: data.ror.scripture,
+              scriptureRef: data.ror.scriptureRef,
+              content: data.ror.content,
+              prayer: data.ror.prayer,
+              furtherStudy: data.ror.furtherStudy ?? [],
+              dailyScriptureReading: data.ror.dailyScriptureReading ?? [],
+            }
+          : null,
+        streak: data.streak ?? 0,
+        completed: data.completed ?? [],
+      };
+    }, fallback, { label: 'daily bundle' });
+  },
+
+  /** GET /tools/plan — reading plan for the ROR plan screen. */
+  async getPlan(days = 14, start?: string): Promise<{ date: string; label: string; completed: boolean }[]> {
+    const params = new URLSearchParams({ days: String(days) });
+    if (start) params.set('start', start);
+    return apiClient.tryApi(
+      async () => (await apiClient.get<{ items: any[] }>(`/tools/plan?${params.toString()}`)).items,
+      () =>
+        Array.from({ length: days }, (_, index) => {
+          const date = new Date(Date.now() + index * 86400000).toISOString().split('T')[0];
+          return { date, label: new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), completed: index < 3 };
+        }),
+      { label: 'reading plan' },
+    );
+  },
+
   async getConfessions(): Promise<DailyConfession[]> {
     return apiClient.tryApi(async () => {
       const data = await apiClient.get<{ items: any[] }>('/tools/confessions');

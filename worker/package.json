@@ -4,19 +4,31 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --local --persist",
+    "dev": "wrangler dev --persist-to .wrangler/state --port 8787",
     "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:prod": "wrangler deploy --env production",
+    "build": "node scripts/build-sql.mjs && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "db:build": "node scripts/build-sql.mjs",
     "db:create": "wrangler d1 create som-connect-db",
-    "db:migrate": "wrangler d1 execute som-connect-db --file=./src/db/schema.sql",
-    "db:seed": "wrangler d1 execute som-connect-db --file=./src/db/seed.sql",
-    "typegen": "wrangler types"
+    "db:migrate:local": "wrangler d1 migrations apply som-connect-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply som-connect-db --remote",
+    "db:seed:local": "wrangler d1 execute som-connect-db --local --file=./src/db/seed.sql",
+    "db:seed:remote": "wrangler d1 execute som-connect-db --remote --file=./src/db/seed.sql",
+    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed:local",
+    "db:console": "wrangler d1 execute som-connect-db --local --command=\"SELECT id, email, role FROM users\"",
+    "storage:create": "wrangler r2 bucket create som-connect-storage",
+    "queue:create": "wrangler queues create som-connect-jobs",
+    "test": "node test/smoke.test.mjs",
+    "test:ci": "node test/smoke.test.mjs --ci"
   },
   "dependencies": {
     "hono": "^4.6.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",
-    "wrangler": "^3.78.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "wrangler": "^3.99.0"
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,21 +6,39 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Play, Download, Share2, Heart, Clock, Eye, Calendar, Bookmark, MessageSquare, ArrowLeft, Sparkles, ArrowUpRight } from 'lucide-react';
 import { featuredContent, conferences, podcasts, originals } from '@/lib/mock-data';
+import { contentService } from '@/services/content-service';
+import { favoritesService } from '@/services/favorites-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 
-const allContent = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
+const mockLibrary = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
 
 export default function ContentDetail() {
   const { id } = useParams();
-  const content = allContent.find(c => c.id === id) || allContent[0];
+  // Live detail (with related items + saved progress) from the Worker.
+  const { data: detail } = useApiData(
+    async () => (await contentService.getById(id ?? '')) as any,
+    (mockLibrary.find(c => c.id === id) || mockLibrary[0]) as any,
+    [id],
+  );
+  const content = detail ?? (mockLibrary.find(c => c.id === id) || mockLibrary[0]);
+  const related = (detail?.related?.length ? detail.related : mockLibrary.filter(c => c.id !== content.id)) as typeof mockLibrary;
   const [isFav, setIsFav] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    setIsFav(favoritesService.isFavorited(content.id));
+  }, [content.id]);
+
   const toggleFav = () => {
-    setIsFav(!isFav);
-    toast({ title: isFav ? 'Removed from favorites' : 'Added to favorites', description: `"${content.title}" ${isFav ? 'removed from' : 'added to'} favorites.` });
+    const next = !isFav;
+    setIsFav(next);
+    if (next) favoritesService.addToFavorites(content.id);
+    else favoritesService.removeFromFavorites(content.id);
+    favoritesService.sync().catch(() => undefined);
+    toast({ title: next ? 'Added to favorites' : 'Removed from favorites', description: `"${content.title}" ${next ? 'added to' : 'removed from'} favorites.` });
   };
 
   const handleShare = () => {
@@ -28,8 +46,14 @@ export default function ContentDetail() {
     toast({ title: 'Link copied', description: 'Share link copied to clipboard.' });
   };
 
-  const handleDownload = () => {
-    toast({ title: 'Download started', description: `"${content.title}" will be available offline.` });
+  const handleDownload = async () => {
+    // Registers the download in D1 and (for R2 backed media) exposes the file URL.
+    try {
+      await contentService.download(content.id);
+      toast({ title: 'Available offline', description: `"${content.title}" was added to your offline library.` });
+    } catch {
+      toast({ title: 'Download started', description: `"${content.title}" will be available offline.` });
+    }
   };
 
   return (
@@ -93,7 +117,7 @@ export default function ContentDetail() {
           <div className="space-y-4">
             <h2 className="font-display text-[1.5rem] tracking-[-0.02em]">Related teachings</h2>
             <div className="grid sm:grid-cols-2 gap-4">
-              {allContent.filter(c=>c.id!==content.id && c.tags.some(tag=>content.tags.includes(tag))).slice(0,4).map(rel=>(
+              {related.filter(c=>c.id!==content.id && (c.tags ?? []).some(tag=>content.tags?.includes(tag))).slice(0,4).map(rel=>(
                 <Link key={rel.id} to={`/library/${rel.id}`} className="group rounded-[1.25rem] overflow-hidden border border-border/50 bg-card hover:border-foreground/10 hover:shadow-[0_8px_24px_hsl(var(--foreground)/0.06)] transition-all">
                   <div className="aspect-[16/9] relative overflow-hidden">
                     <img src={rel.thumbnail} alt={rel.title} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700" />

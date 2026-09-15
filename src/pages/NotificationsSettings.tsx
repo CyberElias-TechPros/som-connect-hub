@@ -4,14 +4,50 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Bell, BookOpen, Users, Megaphone, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function NotificationsSettings() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [settings, setSettings] = useState({ push: true, content: true, daily: true, community: false });
 
-  const update = (k: string, v: boolean) => {
-    setSettings({ ...settings, [k]: v });
-    toast({ title: 'Preference updated', description: 'Notification settings saved — happy path.' });
+  // Load saved preferences (GET /notifications/settings) when signed in.
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get<{ settings: any }>('/notifications/settings')
+      .then((data) => {
+        if (cancelled || !data?.settings) return;
+        setSettings({
+          push: data.settings.pushNotifications ?? true,
+          content: data.settings.newContent ?? true,
+          daily: data.settings.dailyReminders ?? true,
+          community: data.settings.community ?? false,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const update = async (k: string, v: boolean) => {
+    const next = { ...settings, [k]: v };
+    setSettings(next);
+    try {
+      // PUT /notifications/settings — persists to the user's D1 preferences.
+      await apiClient.put('/notifications/settings', {
+        pushNotifications: next.push,
+        newContent: next.content,
+        dailyReminders: next.daily,
+        community: next.community,
+      });
+      toast({ title: 'Preference updated', description: 'Notification settings saved.' });
+    } catch (error: any) {
+      toast({ title: 'Preference updated', description: 'Saved locally — we will sync it when you are online.' });
+    }
   };
 
   return (

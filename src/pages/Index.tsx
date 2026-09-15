@@ -9,6 +9,10 @@ import { Progress } from '@/components/ui/progress';
 import { Search, Play, Clock, TrendingUp, BookOpen, Users, MessageCircle, Library, Calendar, ChevronRight, ArrowUpRight, Sparkles, Flame, Eye, ArrowRight } from 'lucide-react';
 import { featuredContent, conferences, podcasts, originals, dailyConfessions, rorReadings, currentUser } from '@/lib/mock-data';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { contentService } from '@/services/content-service';
+import { toolsService } from '@/services/tools-service';
+import { useApiData } from '@/hooks/use-api-data';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,9 +22,42 @@ export default function Index() {
   const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
   const scale = useTransform(scrollYProgress, [0, 1], [1, 1.05]);
 
-  const continueWatching = featuredContent.filter(c => c.progress).slice(0, 3);
-  const trendingContent = [...conferences, ...podcasts, ...originals].sort((a, b) => b.views - a.views).slice(0, 6);
-  const recommendations = [...podcasts, ...originals].slice(0, 3);
+  // Live data from the Cloudflare Worker, with the mock library as the instant
+  // placeholder so the page never renders empty.
+  const { user: authUser } = useAuth();
+  const { data: featured } = useApiData(
+    () => contentService.featured(),
+    {
+      trending: [...conferences, ...podcasts, ...originals].sort((a, b) => b.views - a.views).slice(0, 6),
+      latest: featuredContent.slice(0, 8),
+      premium: featuredContent.filter(c => c.isPremium),
+      continueWatching: featuredContent.filter(c => c.progress).slice(0, 3),
+      rails: [
+        { id: 'conference', title: 'Conferences', items: conferences },
+        { id: 'podcast', title: 'Podcasts', items: podcasts },
+        { id: 'original', title: 'Originals', items: originals },
+      ],
+    },
+    [],
+  );
+  const { data: daily } = useApiData(
+    () => toolsService.getBundle(),
+    {
+      date: dailyConfessions[0].date,
+      confession: dailyConfessions[0],
+      ror: rorReadings[0],
+      streak: currentUser.streak,
+      completed: [] as string[],
+    },
+    [],
+  );
+
+  const confession = daily.confession ?? dailyConfessions[0];
+  const ror = daily.ror ?? rorReadings[0];
+  const viewer = authUser ?? currentUser;
+  const continueWatching = featured.continueWatching.length ? featured.continueWatching : featuredContent.filter(c => c.progress).slice(0, 3);
+  const trendingContent = featured.trending.length ? featured.trending : [...conferences, ...podcasts, ...originals].sort((a, b) => b.views - a.views).slice(0, 6);
+  const recommendations = (featured.rails.find(r => r.id === 'podcast')?.items ?? podcasts).slice(0, 3);
 
   return (
     <div className="space-y-12 md:space-y-16 pb-8">
@@ -45,7 +82,7 @@ export default function Index() {
               </div>
               <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 backdrop-blur border border-white/5">
                 <Flame className="w-3 h-3 text-amber-300" />
-                <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-white/50">{currentUser.streak} day streak</span>
+                <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-white/50">{daily.streak || viewer.streak} day streak</span>
               </div>
             </div>
             <div className="hidden md:flex items-center gap-2 font-mono text-[10px] tracking-[0.15em] uppercase text-white/30">
@@ -196,16 +233,16 @@ export default function Index() {
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur border border-white/10 flex items-center justify-center"><BookOpen className="w-5 h-5 text-white" /></div>
                 <div>
-                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-white/40">Today • {dailyConfessions[0].date}</div>
+                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-white/40">Today • {confession.date}</div>
                   <div className="font-[650] text-[13px] tracking-[-0.01em] text-white">Daily Confession</div>
                 </div>
               </div>
               <Badge className="rounded-full bg-white/10 backdrop-blur border-white/10 text-white hover:bg-white/15 font-mono text-[10px] tracking-[0.1em] uppercase">Audio • 3 min</Badge>
             </div>
             <div className="mt-8 flex-1">
-              <h3 className="font-display text-[1.8rem] leading-[0.95] tracking-[-0.02em] text-white text-balance">{dailyConfessions[0].title}</h3>
-              <p className="mt-3 text-[14px] leading-[1.6] text-white/60 line-clamp-3">{dailyConfessions[0].content}</p>
-              <blockquote className="mt-4 border-l-2 border-amber-300/30 pl-4 italic text-[13px] text-white/50">"{dailyConfessions[0].scripture}" — {dailyConfessions[0].scriptureRef}</blockquote>
+              <h3 className="font-display text-[1.8rem] leading-[0.95] tracking-[-0.02em] text-white text-balance">{confession.title}</h3>
+              <p className="mt-3 text-[14px] leading-[1.6] text-white/60 line-clamp-3">{confession.content}</p>
+              <blockquote className="mt-4 border-l-2 border-amber-300/30 pl-4 italic text-[13px] text-white/50">"{confession.scripture}" — {confession.scriptureRef}</blockquote>
             </div>
             <Link to="/tools" className="mt-6 inline-flex">
               <Button className="rounded-full bg-white text-black hover:bg-white/90 font-[650] gap-2 h-10 px-5">Read & listen <ArrowRight className="w-4 h-4" /></Button>
@@ -220,16 +257,16 @@ export default function Index() {
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-full bg-secondary border border-border/50 flex items-center justify-center"><Calendar className="w-5 h-5" /></div>
                 <div>
-                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted-foreground">Today • {rorReadings[0].date}</div>
+                  <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-muted-foreground">Today • {ror.date}</div>
                   <div className="font-[650] text-[13px] tracking-[-0.01em]">Rhapsody of Realities</div>
                 </div>
               </div>
-              <Badge variant="secondary" className="rounded-full font-mono text-[10px] tracking-[0.1em] uppercase">{rorReadings[0].theme}</Badge>
+              <Badge variant="secondary" className="rounded-full font-mono text-[10px] tracking-[0.1em] uppercase">{ror.theme}</Badge>
             </div>
             <div className="mt-8 flex-1">
-              <h3 className="font-display text-[1.8rem] leading-[0.95] tracking-[-0.02em] text-balance">{rorReadings[0].title}</h3>
-              <p className="mt-2 font-mono text-[11px] tracking-[0.05em] uppercase text-muted-foreground">{rorReadings[0].scriptureRef}</p>
-              <p className="mt-3 text-[14px] leading-[1.6] text-muted-foreground line-clamp-3">{rorReadings[0].content}</p>
+              <h3 className="font-display text-[1.8rem] leading-[0.95] tracking-[-0.02em] text-balance">{ror.title}</h3>
+              <p className="mt-2 font-mono text-[11px] tracking-[0.05em] uppercase text-muted-foreground">{ror.scriptureRef}</p>
+              <p className="mt-3 text-[14px] leading-[1.6] text-muted-foreground line-clamp-3">{ror.content}</p>
             </div>
             <div className="mt-6 flex gap-2">
               <Link to="/tools"><Button className="rounded-full bg-foreground text-background hover:bg-foreground/90 font-[650] gap-2 h-10 px-5">Open study <ArrowRight className="w-4 h-4" /></Button></Link>
@@ -289,8 +326,8 @@ export default function Index() {
         <div className="flex items-end justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center text-[10px] font-[800]">{currentUser.name[0]}</div>
-              <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-muted-foreground">For you • {currentUser.name.split(' ')[0]}</span>
+              <div className="w-6 h-6 rounded-full bg-foreground text-background flex items-center justify-center text-[10px] font-[800]">{viewer.name[0]}</div>
+              <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-muted-foreground">For you • {viewer.name.split(' ')[0]}</span>
             </div>
             <h2 className="font-display text-[1.8rem] md:text-[2.2rem] leading-[0.9] tracking-[-0.02em]">Recommended</h2>
           </div>

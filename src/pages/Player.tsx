@@ -4,17 +4,33 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { ArrowLeft, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize, Heart, Bookmark, Share2, Settings, Sparkles } from 'lucide-react';
 import { featuredContent, conferences, podcasts, originals } from '@/lib/mock-data';
+import { contentService } from '@/services/content-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { useToast } from '@/components/ui/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const allContent = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
+const mockLibrary = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
 
 export default function Player() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const content = allContent.find(c => c.id === id) || allContent[0];
+  // Pull the real item (plus the R2 media URL) from the Worker.
+  const { data: content } = useApiData(
+    async () => (await contentService.getById(id ?? '')) ?? mockLibrary.find(c => c.id === id) ?? mockLibrary[0],
+    (mockLibrary.find(c => c.id === id) || mockLibrary[0]),
+    [id],
+  );
   const [playing, setPlaying] = useState(true);
   const [progress, setProgress] = useState(12);
+  // Report playback position back to the Worker (best effort, never blocks UI).
+  useEffect(() => {
+    if (!content?.id) return;
+    const timer = setInterval(() => {
+      contentService.syncProgress(content.id, Math.round(progress), 0).catch(() => undefined);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [content?.id, progress]);
+
   const [volume, setVolume] = useState(80);
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);

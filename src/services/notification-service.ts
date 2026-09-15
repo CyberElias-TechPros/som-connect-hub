@@ -18,23 +18,30 @@ class NotificationService {
     this.syncFromApi().catch(()=>{});
   }
 
+  /** Fetch the signed-in user's notifications from the Worker. */
+  async refresh(): Promise<Notification[]> {
+    await this.syncFromApi();
+    return this.notifications;
+  }
+
   private async syncFromApi() {
-    if (!apiClient.hasApi) return;
     try {
       const data = await apiClient.get<{ items: any[], unreadCount: number }>('/notifications');
-      if (data.items?.length) {
+      if (Array.isArray(data?.items)) {
         this.notifications = data.items.map((n: any) => ({
           id: n.id,
           type: n.type,
           title: n.title,
           message: n.message,
-          timestamp: n.created_at || n.timestamp,
-          isRead: !!n.is_read || !!n.isRead,
-          actionUrl: n.action_url || n.actionUrl,
+          timestamp: n.createdAt || n.created_at || n.timestamp,
+          isRead: !!n.isRead || !!n.is_read,
+          actionUrl: n.actionUrl || n.action_url,
         }));
         this.notifySubscribers();
       }
-    } catch {}
+    } catch {
+      /* offline — keep whatever is cached locally */
+    }
   }
 
   subscribe(callback: (notifications: Notification[]) => void): () => void {
@@ -109,29 +116,34 @@ class NotificationService {
   getNotifications(): Notification[] { return this.notifications; }
 
   markAsRead(id: string): void {
+    apiClient.post(`/notifications/${id}/read`, {}).catch(() => undefined);
     this.notifications = this.notifications.map(n => n.id === id ? { ...n, isRead: true } : n);
     this.notifySubscribers();
     if (apiClient.hasApi) apiClient.put(`/notifications/${id}/read`).catch(()=>{});
   }
 
   markAsUnread(id: string): void {
+    apiClient.put(`/notifications/${id}/unread`, {}).catch(() => undefined);
     this.notifications = this.notifications.map(n => n.id === id ? { ...n, isRead: false } : n);
     this.notifySubscribers();
   }
 
   deleteNotification(id: string): void {
+    apiClient.delete(`/notifications/${id}`).catch(() => undefined);
     this.notifications = this.notifications.filter(n => n.id !== id);
     this.notifySubscribers();
     if (apiClient.hasApi) apiClient.delete(`/notifications/${id}`).catch(()=>{});
   }
 
   markAllAsRead(): void {
+    apiClient.put('/notifications/read-all', {}).catch(() => undefined);
     this.notifications = this.notifications.map(n => ({ ...n, isRead: true }));
     this.notifySubscribers();
     if (apiClient.hasApi) apiClient.put('/notifications/read-all').catch(()=>{});
   }
 
   clearAll(): void {
+    apiClient.delete('/notifications').catch(() => undefined);
     this.notifications = [];
     this.notifySubscribers();
     if (apiClient.hasApi) apiClient.delete('/notifications').catch(()=>{});

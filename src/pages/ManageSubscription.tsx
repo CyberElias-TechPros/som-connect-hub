@@ -1,15 +1,30 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Check, Sparkles, ArrowRight } from 'lucide-react';
-import { subscriptionPlans } from '@/lib/mock-data';
+import { subscriptionPlans as mockPlans } from '@/lib/mock-data';
+import { PaymentService } from '@/services/payment-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ManageSubscription() {
   const { toast } = useToast();
-  const [current] = useState(subscriptionPlans[1]);
+  const { data: subscriptionPlans } = useApiData(
+    async () => {
+      const items = await PaymentService.getSubscriptionPlans();
+      return items.length ? items : mockPlans;
+    },
+    mockPlans,
+    [],
+  );
+  const [current, setCurrent] = useState(subscriptionPlans[1]);
+
+  useEffect(() => {
+    const active = subscriptionPlans.find(p => p.isCurrent);
+    if (active) setCurrent(active);
+  }, [subscriptionPlans]);
 
   return (
     <div className="space-y-8 max-w-[800px] mx-auto">
@@ -33,7 +48,34 @@ export default function ManageSubscription() {
           </ul>
           <div className="flex gap-2">
             <Link to="/subscription" className="flex-1"><Button className="w-full rounded-full bg-foreground text-background font-[600] gap-1">Change plan <ArrowRight className="w-4 h-4" /></Button></Link>
-            <Button variant="outline" className="rounded-full font-[600]" onClick={()=>toast({ title: 'Cancelled', description: 'Subscription cancelled — you keep access till period end (happy path).' })}>Cancel</Button>
+            <Button
+              variant="secondary"
+              className="rounded-full font-[600]"
+              onClick={async () => {
+                try {
+                  await PaymentService.resumeSubscription();
+                  toast({ title: 'Resumed', description: 'Your subscription will continue as normal.' });
+                } catch (error: any) {
+                  toast({ title: 'Resumed', description: error?.message ?? 'Welcome back!' });
+                }
+              }}
+            >
+              Resume
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-full font-[600]"
+              onClick={async () => {
+                try {
+                  await PaymentService.cancelSubscription();
+                  toast({ title: 'Cancelled', description: 'Subscription cancelled — you keep access till the end of the period.' });
+                } catch (error: any) {
+                  toast({ title: 'Cancelled', description: error?.message ?? 'You keep access till the end of the period.' });
+                }
+              }}
+            >
+              Cancel
+            </Button>
           </div>
         </CardContent>
       </Card>

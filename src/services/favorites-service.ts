@@ -40,19 +40,27 @@ class FavoritesService {
     try { localStorage.setItem('som_favorites', JSON.stringify(this.favorites)); } catch {}
   }
 
-  private async syncFromApi() {
-    if (!apiClient.hasApi) return;
+  /** Pull the signed-in user's favorites from the Worker (source of truth). */
+  async sync(): Promise<FavoriteItem[]> {
+    return this.syncFromApi();
+  }
+
+  private async syncFromApi(): Promise<FavoriteItem[]> {
     try {
       const data = await apiClient.get<{ items: any[] }>('/favorites');
-      if (data.items?.length) {
+      if (Array.isArray(data?.items)) {
         this.favorites = data.items.map((r: any) => ({
-          contentId: r.content_id || r.contentId,
-          addedAt: r.added_at || r.addedAt,
+          contentId: r.contentId ?? r.content_id,
+          addedAt: r.addedAt ?? r.added_at,
           notes: r.notes,
         }));
         this.persist();
+        this.initialized = true;
       }
-    } catch {}
+    } catch {
+      /* offline — keep the local copy */
+    }
+    return this.favorites;
   }
 
   // Get all favorites

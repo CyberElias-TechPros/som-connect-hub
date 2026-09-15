@@ -3,6 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, Calendar, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { toolsService } from '@/services/tools-service';
+import { useApiData } from '@/hooks/use-api-data';
 
 const plan = Array.from({ length: 30 }).map((_,i)=>({ day: i+1, title: `Day ${i+1}: Living in the Spirit`, done: i < 5, date: new Date(Date.now() + i*86400000).toLocaleDateString() }));
 

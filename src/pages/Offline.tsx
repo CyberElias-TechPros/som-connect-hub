@@ -3,15 +3,40 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, HardDrive, Wifi, Sparkles, Play } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useEffect } from 'react';
+import { contentService } from '@/services/content-service';
+import { useApiData } from '@/hooks/use-api-data';
 
 export default function Offline() {
-  const [items, setItems] = useState([
+  // GET /content/downloads — the offline library stored in D1/R2.
+  const { data: downloads } = useApiData(() => contentService.downloads(), [] as any[], []);
+
+  const [items, setItems] = useState<any[]>([
     { id: '1', title: 'The Power of Faith in Action', size: '1.2 GB', thumb: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=600&h=340&fit=crop' },
     { id: '2', title: 'Daily Inspiration Podcast - Episode 145', size: '84 MB', thumb: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600&h=340&fit=crop' },
   ]);
 
-  const clear = (id: string) => setItems(items.filter(i=>i.id!==id));
-  const clearAll = () => setItems([]);
+  useEffect(() => {
+    if (!downloads?.length) return;
+    setItems(
+      downloads.map((d: any) => ({
+        id: d.contentId ?? d.id,
+        title: d.title ?? 'Downloaded teaching',
+        size: d.size ?? '—',
+        thumb: d.thumbnail ?? 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=600&h=340&fit=crop',
+      })),
+    );
+  }, [downloads]);
+
+  const clear = (id: string) => {
+    setItems(items.filter(i=>i.id!==id));
+    contentService.removeDownload(id).catch(() => undefined);
+  };
+  const clearAll = () => {
+    const ids = items.map((i) => i.id);
+    setItems([]);
+    ids.forEach((id) => contentService.removeDownload(id).catch(() => undefined));
+  };
 
   return (
     <div className="space-y-8 max-w-[800px] mx-auto">

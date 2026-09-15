@@ -2,12 +2,23 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, BookOpen, Sparkles, ArrowUpRight } from 'lucide-react';
-import { publications } from '@/lib/mock-data';
+import { publications as mockPublications } from '@/lib/mock-data';
+import { toolsService } from '@/services/tools-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Publications() {
   const { toast } = useToast();
+  // GET /tools/publications (issue list from D1)
+  const { data: publications } = useApiData(
+    async () => {
+      const items = await toolsService.getPublications();
+      return items.length ? items : mockPublications;
+    },
+    mockPublications,
+    [],
+  );
   return (
     <div className="space-y-8 max-w-[1000px] mx-auto">
       <div>

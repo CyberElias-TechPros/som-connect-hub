@@ -8,6 +8,11 @@ interface NotificationContextType {
   isRealtimeEnabled: boolean;
   toggleRealtime: () => void;
   refreshNotifications: () => void;
+  markAsRead: (id: string) => void;
+  markAsUnread: (id: string) => void;
+  markAllAsRead: () => void;
+  deleteNotification: (id: string) => void;
+  clearAll: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -48,13 +53,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const refreshNotifications = () => {
-    // In a real app, this would fetch fresh notifications from the server
-    console.log('Refreshing notifications...');
-    notificationService.notifySubscribers();
+    // Pulls fresh notifications from the Cloudflare Worker when online.
+    notificationService.refresh().then((items) => {
+      setNotifications(items);
+      setUnreadCount(items.filter(n => !n.isRead).length);
+    }).catch(() => notificationService.notifySubscribers());
   };
 
+  const markAsRead = (id: string) => notificationService.markAsRead(id);
+  const markAsUnread = (id: string) => notificationService.markAsUnread(id);
+  const markAllAsRead = () => notificationService.markAllAsRead();
+  const deleteNotification = (id: string) => notificationService.deleteNotification(id);
+  const clearAll = () => notificationService.clearAll();
+
   return (
-    <NotificationContext.Provider value={{ unreadCount, notifications, isRealtimeEnabled, toggleRealtime, refreshNotifications }}>
+    <NotificationContext.Provider value={{ unreadCount, notifications, isRealtimeEnabled, toggleRealtime, refreshNotifications, markAsRead, markAsUnread, markAllAsRead, deleteNotification, clearAll }}>
       {children}
     </NotificationContext.Provider>
   );

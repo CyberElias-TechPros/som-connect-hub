@@ -4,10 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, FileVideo, Eye, TrendingUp, Shield, UserCog, ChevronRight, BarChart2, Calendar, Activity } from 'lucide-react';
-import { adminStats } from '@/lib/mock-data';
+import { adminStats as mockAdminStats } from '@/lib/mock-data';
 import { motion } from 'framer-motion';
+import { adminService } from '@/services/admin-service';
+import { useApiData } from '@/hooks/use-api-data';
 
 export default function AdminDashboard() {
+  // GET /admin/stats — real counters from D1 (mock numbers render instantly).
+  const { data: adminStats } = useApiData(
+    () => adminService.getStats(),
+    mockAdminStats,
+    [],
+    { pollMs: 60000 },
+  );
+
   return (
     <div className="space-y-8 max-w-[1200px] mx-auto">
       <div className="flex flex-wrap items-end justify-between gap-4">

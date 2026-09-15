@@ -1,24 +1,51 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Heart, MessageCircle, Users, ChevronRight, Plus, Sparkles, ArrowUpRight, Image as ImageIcon } from 'lucide-react';
-import { communityPosts, groups, currentUser } from '@/lib/mock-data';
+import { communityPosts, groups as mockGroups, currentUser } from '@/lib/mock-data';
+import { communityService } from '@/services/community-service';
+import { useApiData } from '@/hooks/use-api-data';
+import { useAuth } from '@/contexts/AuthContext';
 import CreatePostDialog from '@/components/community/CreatePostDialog';
 import { motion } from 'framer-motion';
-import { useAuth } from '@/contexts/AuthContext';
 
 export default function Community() {
   const { user } = useAuth();
-  const author = user || currentUser;
+  const author = user ?? currentUser;
+  const viewer = author;
   const [posts, setPosts] = useState(communityPosts);
-  const [joinedGroups, setJoinedGroups] = useState<string[]>(groups.filter(g=>g.isJoined).map(g=>g.id));
+  const [joinedGroups, setJoinedGroups] = useState<string[]>(mockGroups.filter(g=>g.isJoined).map(g=>g.id));
 
-  const handlePostCreated = (content: string, image?: string) => {
-    const newPost = {
-      id: Date.now().toString(),
+  // Live community feed + groups from the Worker.
+  const { data: livePosts, refresh: refreshPosts } = useApiData(
+    async () => {
+      const items = await communityService.getPosts(30, 0);
+      return items.length ? items : communityPosts;
+    },
+    communityPosts,
+    [],
+    { pollMs: 30000 },
+  );
+  const { data: groups } = useApiData(
+    async () => {
+      const items = await communityService.getGroups();
+      return items.length ? items : mockGroups;
+    },
+    mockGroups,
+    [],
+  );
+
+  useEffect(() => { setPosts(livePosts); }, [livePosts]);
+  useEffect(() => {
+    setJoinedGroups(groups.filter(g => g.isJoined).map(g => g.id));
+  }, [groups]);
+
+  const handlePostCreated = async (content: string, image?: string) => {
+    const optimistic = {
+      id: `local-${Date.now()}`,
       author,
       content,
       timestamp: new Date().toISOString(),
@@ -26,15 +53,25 @@ export default function Community() {
       comments: 0,
       image,
     };
-    setPosts(prev => [newPost, ...prev]);
+    setPosts(prev => [optimistic, ...prev]);
+    try {
+      // POST /community/posts — then refresh so the real id/author land.
+      const created = await communityService.createPost(content, image);
+      if (created?.id) refreshPosts();
+    } catch {
+      /* offline: the optimistic post stays visible */
+    }
   };
 
-  const handleLike = (postId: string) => {
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: p.likes + 1 } : p));
+  const handleLike = async (postId: string) => {
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: p.likes + 1, isLiked: true } : p));
+    await communityService.likePost(postId).catch(() => undefined);
   };
 
-  const toggleJoin = (id: string) => {
-    setJoinedGroups(prev => prev.includes(id) ? prev.filter(g=>g!==id) : [...prev, id]);
+  const toggleJoin = async (id: string) => {
+    const joining = !joinedGroups.includes(id);
+    setJoinedGroups(prev => (joining ? [...prev, id] : prev.filter(g=>g!==id)));
+    await communityService.joinGroup(id).catch(() => undefined);
   };
 
   return (

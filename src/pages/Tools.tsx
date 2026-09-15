@@ -1,30 +1,54 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Flame, BookOpen, ChevronRight, Volume2, Share2, Play, Pause, SkipBack, SkipForward, Sparkles, Check } from 'lucide-react';
 import { dailyConfessions, rorReadings, currentUser } from '@/lib/mock-data';
+import { toolsService } from '@/services/tools-service';
+import { useApiData } from '@/hooks/use-api-data';
+import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 
 export default function Tools() {
-  const confession = dailyConfessions[0];
-  const ror = rorReadings[0];
+  const { user } = useAuth();
+  // Today's devotionals + streak come from D1 (generated daily if missing).
+  const { data: bundle, refresh } = useApiData(
+    () => toolsService.getBundle(),
+    {
+      date: dailyConfessions[0].date,
+      confession: dailyConfessions[0],
+      ror: rorReadings[0],
+      streak: currentUser.streak,
+      completed: [] as string[],
+    },
+    [],
+  );
+  const confession = bundle.confession ?? dailyConfessions[0];
+  const ror = bundle.ror ?? rorReadings[0];
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(12);
   const [duration] = useState(180);
-  const [streak, setStreak] = useState(currentUser.streak);
-  const [completed, setCompleted] = useState<string[]>([]);
+  const [streak, setStreak] = useState(bundle.streak || currentUser.streak);
+  const [completed, setCompleted] = useState<string[]>(bundle.completed ?? []);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (bundle.streak) setStreak(bundle.streak);
+    if (bundle.completed?.length) setCompleted(bundle.completed);
+  }, [bundle.streak, bundle.completed]);
 
   const togglePlay = () => setIsPlaying(!isPlaying);
   const formatTime = (t: number) => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
 
-  const markCompleted = (id: string) => {
-    if (!completed.includes(id)) {
-      setCompleted([...completed, id]);
-      setStreak(s=>s+1);
-    }
+  const markCompleted = async (id: string) => {
+    if (completed.includes(id)) return;
+    setCompleted([...completed, id]);
+    setStreak(s => s + 1);
+    // POST /tools/complete — persists the streak server-side.
+    const result = await toolsService.markComplete(id === 'confession' ? 'confession' : 'ror');
+    if (typeof result?.streak === 'number' && result.streak > 0) setStreak(result.streak);
+    refresh().catch(() => undefined);
   };
 
   return (
