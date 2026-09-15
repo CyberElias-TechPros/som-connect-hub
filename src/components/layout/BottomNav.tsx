@@ -9,78 +9,42 @@ const navItems = [
   { to: '/library', icon: Library, label: 'Library' },
   { to: '/tools', icon: BookOpen, label: 'Tools' },
   { to: '/community', icon: Users, label: 'Community' },
-  { to: '/qa', icon: Users, label: 'Q&A' },
-  { to: '/playlists', icon: List, label: 'Playlists' },
-  { to: '/favorites', icon: Heart, label: 'Favorites' },
-  { to: '/profile', icon: User, label: 'Profile' },
+  { to: '/favorites', icon: Heart, label: 'Saved' },
+  { to: '/profile', icon: User, label: 'You' },
 ];
 
 export function BottomNav() {
   const location = useLocation();
 
   return (
-    <nav 
-      className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-lg border-t border-border safe-bottom"
-      role="navigation"
-      aria-label="Main navigation"
-    >
-      <div className="flex items-center justify-around h-16 px-2">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.to || 
-            (item.to !== '/' && location.pathname.startsWith(item.to));
-
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex flex-col items-center justify-center flex-1 h-full relative group",
-                "transition-colors duration-200 ease-in-out",
-                isActive ? "text-primary" : "text-muted-foreground"
-              )}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              <motion.div
-                className="relative"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    <nav className="fixed bottom-0 left-0 right-0 z-50 safe-bottom">
+      <div className="mx-auto max-w-[640px] p-3">
+        <div className="flex items-center justify-around h-[64px] px-2 rounded-[1.5rem] bg-card/90 backdrop-blur-[24px] border border-border/50 shadow-[0_8px_32px_hsl(var(--foreground)/0.12),0_0_0_1px_hsl(var(--foreground)/0.04)]">
+          {navItems.map(item => {
+            const isActive = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to));
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "relative flex flex-col items-center justify-center flex-1 h-full gap-1 rounded-[1rem] transition-colors",
+                  isActive ? "text-foreground" : "text-muted-foreground"
+                )}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <motion.div
-                  initial={{ scale: 1 }}
-                  animate={{ scale: isActive ? 1.1 : 1 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                >
-                  <item.icon
-                    className={cn(
-                      "w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200",
-                      isActive && "scale-110"
-                    )} />
+                {isActive && (
+                  <motion.div layoutId="bottomNavBg" className="absolute inset-1 rounded-[0.9rem] bg-secondary" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                )}
+                <motion.div className="relative z-10" whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+                  <item.icon className={cn("w-[20px] h-[20px] transition-transform", isActive && "scale-[1.05]")} />
                 </motion.div>
-                <AnimatePresence>
-                  {isActive && (
-                    <motion.div
-                      layoutId="bottomNavIndicator"
-                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent"
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 600, damping: 25 }} />
-                  )}
-                </AnimatePresence>
-              </motion.div>
-              <div className="flex flex-col items-center">
-                <span className={cn(
-                  "text-xs mt-1 font-medium transition-all duration-200",
-                  isActive ? "opacity-100" : "opacity-70"
-                )}>
-                  {item.label}
-                </span>
-              </div>
-            </NavLink>
-          );
-        })}
+                <span className={cn("relative z-10 text-[10px] font-[650] tracking-[-0.01em] leading-none", isActive ? "opacity-100" : "opacity-70")}>{item.label}</span>
+              </NavLink>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
-}export default BottomNav;
+}
+export default BottomNav;

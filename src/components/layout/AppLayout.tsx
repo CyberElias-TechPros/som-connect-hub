@@ -1,23 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BottomNav } from './BottomNav';
 import { DesktopSidebar } from './DesktopSidebar';
 import { TopBar } from './TopBar';
 import { useDeviceType } from '@/hooks/use-mobile';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AccessibilityToolbar } from '@/components/ui/AccessibilityFeatures';
+import { useAuth } from '@/contexts/AuthContext';
 
-/* ---------------------------------------------
-   Shared animated outlet (no remounting)
---------------------------------------------- */
 function AnimatedOutlet() {
+  const location = useLocation();
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.2, ease: 'easeInOut' }}
+        key={location.pathname}
+        initial={{ opacity: 0, y: 8, filter: 'blur(6px)' }}
+        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+        exit={{ opacity: 0, y: -8, filter: 'blur(6px)' }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <Outlet />
       </motion.div>
@@ -28,311 +28,113 @@ function AnimatedOutlet() {
 export function AppLayout() {
   const { isMobile, isTablet, isDesktop } = useDeviceType();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const expandedWidth = isDesktop ? 256 : 192;
+  const expandedWidth = isDesktop ? 280 : 260;
 
-  /* ---------------------------------------------
-     Routes without navigation
-  --------------------------------------------- */
-  const hideNavRoutes = [
-    '/splash',
-    '/onboarding',
-    '/login',
-    '/register',
-    '/forgot-password',
-    '/player',
-  ];
+  const hideNavRoutes = ['/splash', '/onboarding', '/login', '/register', '/forgot-password', '/player'];
+  const hideNav = hideNavRoutes.some(route => location.pathname === route || location.pathname.startsWith(`${route}/`));
 
-  const hideNav = hideNavRoutes.some(
-    route => location.pathname === route || location.pathname.startsWith(`${route}/`)
-  );
-
-  /* ---------------------------------------------
-     Reset sidebar when entering mobile
-  --------------------------------------------- */
+  // Auth guard: if not authenticated and not loading, redirect to login except public routes
   useEffect(() => {
-    if (isMobile) {
-      setSidebarCollapsed(false);
+    if (!isLoading && !isAuthenticated) {
+      const publicRoutes = ['/splash', '/onboarding', '/login', '/register', '/forgot-password'];
+      const isPublic = publicRoutes.some(r => location.pathname === r || location.pathname.startsWith(r + '/'));
+      if (!isPublic) {
+        // Check localStorage for onboarding
+        const seen = localStorage.getItem('som_seen_onboarding');
+        if (!seen) navigate('/splash');
+        else navigate('/login');
+      }
     }
+  }, [isAuthenticated, isLoading, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (isMobile) setSidebarCollapsed(false);
   }, [isMobile]);
 
   if (hideNav) {
+    return <Outlet />;
+  }
+
+  // Show loading state while auth resolves — premium skeleton
+  if (isLoading) {
     return (
-      <>
-        <Outlet />
-        {/* Toolbar intentionally hidden when nav is hidden */}
-      </>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-foreground animate-pulse" />
+          <div className="w-24 h-2 rounded-full bg-secondary animate-pulse" />
+        </div>
+      </div>
     );
   }
 
-  /* ---------------------------------------------
-     DESKTOP LAYOUT
-  --------------------------------------------- */
   if (isDesktop) {
     return (
       <>
-        <a href="#main-content" className="skip-link">
-          Skip to main content
-        </a>
-
-        <div className="flex min-h-screen bg-background">
-          <motion.aside
-            id="desktop-sidebar"
-            aria-hidden={sidebarCollapsed}
-            animate={{ width: sidebarCollapsed ? 64 : expandedWidth }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="shrink-0"
-          >
-            <DesktopSidebar
-              collapsed={sidebarCollapsed}
-              onCollapsedChange={setSidebarCollapsed}
-            />
+        <a href="#main-content" className="skip-link">Skip to main content</a>
+        <div className="flex min-h-screen bg-background relative">
+          {/* Ambient mesh */}
+          <div className="pointer-events-none fixed inset-0 bg-mesh opacity-[0.03] dark:opacity-[0.06]" />
+          <motion.aside id="desktop-sidebar" aria-hidden={sidebarCollapsed} animate={{ width: sidebarCollapsed ? 72 : expandedWidth }} transition={{ type: 'spring', stiffness: 320, damping: 32 }} className="shrink-0 relative z-10">
+            <DesktopSidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
           </motion.aside>
-
-          <div className="flex-1 flex flex-col">
-            <TopBar
-              onMenuClick={() => setSidebarCollapsed(v => !v)}
-              aria-expanded={!sidebarCollapsed}
-              aria-controls="desktop-sidebar"
-            />
-
-            <main
-              id="main-content"
-              role="main"
-              aria-label="Main content"
-              className="flex-1 overflow-auto p-4 md:p-6 lg:p-8"
-            >
-              <AnimatedOutlet />
+          <div className="flex-1 flex flex-col min-w-0 relative z-10">
+            <TopBar onMenuClick={() => setSidebarCollapsed(v => !v)} aria-expanded={!sidebarCollapsed} aria-controls="desktop-sidebar" />
+            <main id="main-content" role="main" aria-label="Main content" className="flex-1 overflow-auto">
+              <div className="max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
+                <AnimatedOutlet />
+              </div>
             </main>
           </div>
         </div>
-
         <AccessibilityToolbar />
       </>
     );
   }
 
-  /* ---------------------------------------------
-      TABLET LAYOUT
-   --------------------------------------------- */
-   if (isTablet) {
-     return (
-       <>
-         <a href="#main-content" className="skip-link">
-           Skip to main content
-         </a>
+  if (isTablet) {
+    return (
+      <>
+        <a href="#main-content" className="skip-link">Skip to main content</a>
+        <div className="flex flex-col min-h-screen bg-background relative">
+          <div className="pointer-events-none fixed inset-0 bg-mesh opacity-[0.03]" />
+          <div className="flex flex-1 relative z-10">
+            <motion.aside id="tablet-sidebar" aria-hidden={sidebarCollapsed} animate={{ width: sidebarCollapsed ? 72 : expandedWidth }} transition={{ type: 'spring', stiffness: 320, damping: 32 }} className="shrink-0">
+              <DesktopSidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
+            </motion.aside>
+            <div className="flex-1 flex flex-col min-w-0">
+              <TopBar collapsed={sidebarCollapsed} onMenuClick={() => setSidebarCollapsed(v => !v)} aria-expanded={!sidebarCollapsed} aria-controls="tablet-sidebar" />
+              <main id="main-content" role="main" aria-label="Main content" className="flex-1 overflow-auto p-4 pb-24">
+                <AnimatedOutlet />
+              </main>
+            </div>
+          </div>
+          <BottomNav />
+        </div>
+        <AccessibilityToolbar />
+      </>
+    );
+  }
 
-         <div className="flex flex-col min-h-screen bg-background">
-           <div className="flex flex-1">
-             <motion.aside
-               id="tablet-sidebar"
-               aria-hidden={sidebarCollapsed}
-               animate={{ width: sidebarCollapsed ? 64 : expandedWidth }}
-               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-               className="shrink-0"
-             >
-               <DesktopSidebar
-                 collapsed={sidebarCollapsed}
-                 onCollapsedChange={setSidebarCollapsed}
-               />
-             </motion.aside>
-
-             <div className="flex-1 flex flex-col">
-               <TopBar
-                 collapsed={sidebarCollapsed}
-                 onMenuClick={() => setSidebarCollapsed(v => !v)}
-                 aria-expanded={!sidebarCollapsed}
-                 aria-controls="tablet-sidebar"
-               />
-
-               <main
-                 id="main-content"
-                 role="main"
-                 aria-label="Main content"
-                 className="flex-1 overflow-auto p-3 md:p-4 pb-20"
-               >
-                 <AnimatedOutlet />
-               </main>
-             </div>
-           </div>
-
-           <BottomNav />
-         </div>
-
-         <AccessibilityToolbar />
-       </>
-     );
-   }
-
-  /* ---------------------------------------------
-     MOBILE LAYOUT (default)
-  --------------------------------------------- */
   return (
     <>
-      <a href="#main-content" className="skip-link">
-        Skip to main content
-      </a>
-
-      <div className="flex flex-col min-h-screen bg-background">
-        <TopBar />
-
-        <main
-          id="main-content"
-          role="main"
-          aria-label="Main content"
-          className="flex-1 overflow-auto pb-20"
-        >
-          <AnimatedOutlet />
-        </main>
-
-        <BottomNav />
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+      <div className="flex flex-col min-h-screen bg-background relative">
+        <div className="pointer-events-none fixed inset-0 bg-mesh opacity-[0.04]" />
+        <div className="relative z-10 flex flex-col min-h-screen">
+          <TopBar />
+          <main id="main-content" role="main" aria-label="Main content" className="flex-1 overflow-auto pb-28">
+            <div className="p-4">
+              <AnimatedOutlet />
+            </div>
+          </main>
+          <BottomNav />
+        </div>
       </div>
-
       <AccessibilityToolbar />
     </>
   );
 }
-
-
-// import React, { useState } from 'react';
-// import { Outlet, useLocation } from 'react-router-dom';
-// import { BottomNav } from './BottomNav';
-// import { DesktopSidebar } from './DesktopSidebar';
-// import { TopBar } from './TopBar';
-// import { useDeviceType } from '@/hooks/use-mobile';
-// import { cn } from '@/lib/utils';
-// import { motion, AnimatePresence } from 'framer-motion';
-// import { AccessibilityToolbar } from '@/components/ui/AccessibilityFeatures';
-
-// export function AppLayout() {
-//   const { isMobile, isTablet, isDesktop } = useDeviceType();
-//   const location = useLocation();
-//   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-//   // Pages where we don't show navigation
-//   const hideNavRoutes = ['/splash', '/onboarding', '/login', '/register', '/forgot-password', '/player'];
-//   const hideNav = hideNavRoutes.some(route => location.pathname.startsWith(route));
-
-//   if (hideNav) {
-//     return <Outlet />;
-//   }
-
-//   return (
-//     <>
-//       <div className="min-h-screen bg-background">
-//         {/* Skip link for accessibility */}
-//         <a href="#main-content" className="skip-link">
-//           Skip to main content
-//         </a>
-
-//         {/* Desktop layout */}
-//         {isDesktop && (
-//           <div className="flex min-h-screen">
-//             <motion.div
-//               animate={{ width: sidebarCollapsed ? 64 : 256 }}
-//               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-//               className="relative"
-//             >
-//               <DesktopSidebar
-//                 collapsed={sidebarCollapsed}
-//                 onCollapsedChange={setSidebarCollapsed}
-//               />
-//             </motion.div>
-//             <motion.div
-//               className="flex-1 flex flex-col"
-//               animate={{ marginLeft: sidebarCollapsed ? 64 : 256 }}
-//               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-//             >
-//               <TopBar onMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
-//               <main
-//                 id="main-content"
-//                 className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto"
-//                 role="main"
-//                 aria-label="Main content"
-//               >
-//                 <AnimatePresence mode="wait">
-//                   <motion.div
-//                     key={location.pathname}
-//                     initial={{ opacity: 0, y: 10 }}
-//                     animate={{ opacity: 1, y: 0 }}
-//                     exit={{ opacity: 0, y: -10 }}
-//                     transition={{ duration: 0.2, ease: 'easeInOut' }}
-//                   >
-//                     <Outlet />
-//                   </motion.div>
-//                 </AnimatePresence>
-//               </main>
-//             </motion.div>
-//           </div>
-//         )}
-
-//         {/* Tablet layout */}
-//         {isTablet && (
-//           <div className="min-h-screen bg-background">
-//             <motion.div
-//               className="fixed left-0 top-0 h-screen z-40 border-r border-sidebar-border"
-//               animate={{ width: sidebarCollapsed ? 64 : 256 }}
-//               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-//             >
-//               <DesktopSidebar
-//                 collapsed={sidebarCollapsed}
-//                 onCollapsedChange={setSidebarCollapsed}
-//               />
-//             </motion.div>
-//             <div className="flex min-h-screen">
-//               <div className="flex-1 flex flex-col">
-//                 <TopBar collapsed={sidebarCollapsed} onMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
-//                 <main
-//                   id="main-content"
-//                   className="flex-1 p-3 md:p-4 overflow-auto"
-//                   role="main"
-//                   aria-label="Main content"
-//                 >
-//                   <AnimatePresence mode="wait">
-//                     <motion.div
-//                       key={location.pathname}
-//                       initial={{ opacity: 0, y: 10 }}
-//                       animate={{ opacity: 1, y: 0 }}
-//                       exit={{ opacity: 0, y: -10 }}
-//                       transition={{ duration: 0.2, ease: 'easeInOut' }}
-//                     >
-//                       <Outlet />
-//                     </motion.div>
-//                   </AnimatePresence>
-//                 </main>
-//               </div>
-//             </div>
-//           </div>
-//         )}
-
-//         {/* Mobile layout */}
-//         {isMobile && (
-//           <div className="flex flex-col min-h-screen">
-//             <TopBar />
-//             <main
-//               id="main-content"
-//               className="flex-1 pb-20 overflow-auto"
-//               role="main"
-//               aria-label="Main content"
-//             >
-//               <AnimatePresence mode="wait">
-//                 <motion.div
-//                   key={location.pathname}
-//                   initial={{ opacity: 0, y: 10 }}
-//                   animate={{ opacity: 1, y: 0 }}
-//                   exit={{ opacity: 0, y: -10 }}
-//                   transition={{ duration: 0.2, ease: 'easeInOut' }}
-//                 >
-//                   <Outlet />
-//                 </motion.div>
-//               </AnimatePresence>
-//             </main>
-//             <BottomNav />
-//           </div>
-//         )}
-//       </div>
-//       <AccessibilityToolbar />
-//     </>
-//   );
-// }

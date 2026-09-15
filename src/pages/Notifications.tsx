@@ -1,146 +1,65 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bell, Trash2, Check, CheckCheck, Wifi, WifiOff, Settings } from 'lucide-react';
-import { useNotifications } from '@/hooks/use-notifications';
-import { Switch } from '@/components/ui/switch';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Bell, CheckCheck, Trash2, Play, MessageCircle, Users, Sparkles } from 'lucide-react';
+import { useNotificationContext } from '@/contexts/NotificationContext';
+import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 
 export default function Notifications() {
-  const {
-    notifications: notifs,
-    markAsRead,
-    markAsUnread,
-    deleteNotification,
-    markAllAsRead,
-    isRealtimeEnabled,
-    toggleRealtime,
-    getNotificationsByType
-  } = useNotifications();
-
-  const allNotifications = notifs;
-  const unreadNotifications = notifs.filter(n => !n.isRead);
-  const contentNotifications = getNotificationsByType('content');
-  const qaNotifications = getNotificationsByType('qa');
-  const communityNotifications = getNotificationsByType('community');
-  const systemNotifications = getNotificationsByType('system');
-
-  const NotificationItem = ({ notification }: { notification: typeof notifs[0] }) => (
-    <Card className={`mb-4 ${!notification.isRead ? 'border-l-4 border-l-blue-500' : ''}`}>
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            <CardTitle className="text-sm font-medium">{notification.title}</CardTitle>
-            <Badge variant={notification.type === 'content' ? 'default' : notification.type === 'qa' ? 'secondary' : 'outline'}>
-              {notification.type}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-1">
-            {notification.isRead ? (
-              <Button variant="ghost" size="sm" onClick={() => markAsUnread(notification.id)}>
-                <CheckCheck className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => markAsRead(notification.id)}>
-                <Check className="h-4 w-4" />
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => deleteNotification(notification.id)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground mb-2">{notification.message}</p>
-        <p className="text-xs text-muted-foreground">
-          {new Date(notification.timestamp).toLocaleString()}
-        </p>
-      </CardContent>
-    </Card>
-  );
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAll } = useNotificationContext();
 
   return (
-    <div className="space-y-6 p-4 md:p-0">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold">Notifications</h1>
-        <div className="flex items-center gap-4">
-          <Button onClick={markAllAsRead} disabled={unreadNotifications.length === 0}>
-            Mark All as Read
-          </Button>
-          <div className="flex items-center gap-2">
-            {isRealtimeEnabled ? (
-              <Wifi className="h-4 w-4 text-green-500" />
-            ) : (
-              <WifiOff className="h-4 w-4 text-gray-500" />
-            )}
-            <Switch
-              id="realtime-toggle"
-              checked={isRealtimeEnabled}
-              onCheckedChange={toggleRealtime}
-              className="data-[state=checked]:bg-green-500"
-            />
-            <span className="text-sm">Real-time Updates</span>
+    <div className="space-y-8 max-w-[800px] mx-auto">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="px-2.5 py-1 rounded-full bg-foreground text-background font-mono text-[10px] tracking-[0.15em] uppercase">Inbox • {unreadCount} unread</span>
+            <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground flex items-center gap-1"><Bell className="w-3 h-3" /> Real-time</span>
           </div>
+          <h1 className="font-display text-[2.2rem] md:text-[3rem] leading-[0.9] tracking-[-0.03em]">Notifications</h1>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" className="rounded-full h-10 px-4 font-[600] gap-1" onClick={markAllAsRead}><CheckCheck className="w-4 h-4" /> Mark all read</Button>
+          <Button variant="outline" className="rounded-full h-10 px-4 font-[600] gap-1" onClick={clearAll}><Trash2 className="w-4 h-4" /> Clear</Button>
         </div>
       </div>
 
-      <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="all">All ({allNotifications.length})</TabsTrigger>
-          <TabsTrigger value="unread">Unread ({unreadNotifications.length})</TabsTrigger>
-          <TabsTrigger value="content">Content ({contentNotifications.length})</TabsTrigger>
-          <TabsTrigger value="qa">Q&A ({qaNotifications.length})</TabsTrigger>
-          <TabsTrigger value="system">System ({systemNotifications.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="all" className="mt-4">
-          {allNotifications.length === 0 ? (
-            <p className="text-center text-muted-foreground">No notifications</p>
-          ) : (
-            allNotifications.map(notification => (
-              <NotificationItem key={notification.id} notification={notification} />
-            ))
-          )}
-        </TabsContent>
-        <TabsContent value="unread" className="mt-4">
-          {unreadNotifications.length === 0 ? (
-            <p className="text-center text-muted-foreground">No unread notifications</p>
-          ) : (
-            unreadNotifications.map(notification => (
-              <NotificationItem key={notification.id} notification={notification} />
-            ))
-          )}
-        </TabsContent>
-        <TabsContent value="content" className="mt-4">
-          {contentNotifications.length === 0 ? (
-            <p className="text-center text-muted-foreground">No content notifications</p>
-          ) : (
-            contentNotifications.map(notification => (
-              <NotificationItem key={notification.id} notification={notification} />
-            ))
-          )}
-        </TabsContent>
-        <TabsContent value="qa" className="mt-4">
-          {qaNotifications.length === 0 ? (
-            <p className="text-center text-muted-foreground">No Q&A notifications</p>
-          ) : (
-            qaNotifications.map(notification => (
-              <NotificationItem key={notification.id} notification={notification} />
-            ))
-          )}
-        </TabsContent>
-        <TabsContent value="system" className="mt-4">
-          {systemNotifications.length === 0 ? (
-            <p className="text-center text-muted-foreground">No system notifications</p>
-          ) : (
-            systemNotifications.map(notification => (
-              <NotificationItem key={notification.id} notification={notification} />
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
+      {notifications.length===0 ? (
+        <div className="py-20 text-center rounded-[1.75rem] border border-dashed border-border/60 bg-secondary/20 space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-full bg-card border border-border/50 flex items-center justify-center"><Bell className="w-6 h-6 text-muted-foreground" /></div>
+          <h3 className="font-display text-[1.4rem]">All caught up</h3>
+          <p className="text-[13px] text-muted-foreground">No notifications — enjoy the quiet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {notifications.map((n,i)=>(
+            <motion.div key={n.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.03 }}>
+              <Card className={`rounded-[1.25rem] border-border/50 hover:border-foreground/10 transition-colors ${!n.isRead ? 'bg-card shadow-[0_4px_16px_hsl(var(--foreground)/0.04)] border-foreground/10' : 'bg-card/60'}`}>
+                <CardContent className="p-5 flex gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${n.type==='content' ? 'bg-amber-500/15 text-amber-600' : n.type==='qa' ? 'bg-emerald-500/15 text-emerald-600' : n.type==='community' ? 'bg-blue-500/15 text-blue-600' : 'bg-secondary'}`}>
+                    {n.type==='content' ? <Play className="w-5 h-5" /> : n.type==='qa' ? <MessageCircle className="w-5 h-5" /> : n.type==='community' ? <Users className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-[650] tracking-[-0.01em] text-[14px]">{n.title}</h3>
+                      {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-foreground" />}
+                      <span className="ml-auto font-mono text-[10px] tracking-[0.05em] uppercase text-muted-foreground">{new Date(n.timestamp).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-[13px] leading-[1.5] text-muted-foreground mt-1">{n.message}</p>
+                    <div className="mt-3 flex gap-2">
+                      {n.actionUrl && <Link to={n.actionUrl}><Button size="sm" className="rounded-full h-8 px-4 bg-foreground text-background text-[12px] font-[600]">Open</Button></Link>}
+                      <Button size="sm" variant="outline" className="rounded-full h-8 px-4 text-[12px] font-[600]" onClick={()=>markAsRead(n.id)}>Mark read</Button>
+                      <Button size="sm" variant="ghost" className="rounded-full h-8 px-3 text-[12px]" onClick={()=>deleteNotification(n.id)}><Trash2 className="w-3 h-3" /></Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

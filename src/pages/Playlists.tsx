@@ -1,383 +1,93 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Link } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, List, Grid, Search, Trash2, Edit, Users, Globe, Lock, Copy, Star } from 'lucide-react';
-import { usePlaylists } from '@/hooks/use-playlists';
-import { useToast } from '@/hooks/use-toast';
-import { conferences, podcasts, originals } from '@/lib/mock-data';
+import { Play, Plus, List, Search, Sparkles, MoreHorizontal } from 'lucide-react';
+import { playlists as mockPlaylists } from '@/lib/mock-data';
+import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function Playlists() {
-  const {
-    playlists,
-    isLoading,
-    createPlaylist,
-    deletePlaylist,
-    getContentInPlaylist,
-    getPublicPlaylists,
-    getRecentlyUpdatedPlaylists,
-    getPopularPlaylists,
-  } = usePlaylists();
-  
-  const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [newPlaylistName, setNewPlaylistName] = useState('');
-  const [newPlaylistDescription, setNewPlaylistDescription] = useState('');
-  const [newPlaylistIsPublic, setNewPlaylistIsPublic] = useState(false);
-  const { toast } = useToast();
-  const navigate = useNavigate();
+  const [playlists, setPlaylists] = useState(mockPlaylists);
+  const [q, setQ] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [open, setOpen] = useState(false);
 
-  const allContent = [...conferences, ...podcasts, ...originals];
-  const publicPlaylists = getPublicPlaylists();
-  const recentPlaylists = getRecentlyUpdatedPlaylists();
-  const popularPlaylists = getPopularPlaylists();
+  const filtered = playlists.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
 
-  const filteredPlaylists = playlists.filter(playlist =>
-    playlist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    playlist.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleCreatePlaylist = () => {
-    if (!newPlaylistName.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Playlist name is required',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    createPlaylist(newPlaylistName, newPlaylistDescription, newPlaylistIsPublic);
-    
-    toast({
-      title: 'Success',
-      description: 'Playlist created successfully',
-    });
-    
-    // Reset form
-    setNewPlaylistName('');
-    setNewPlaylistDescription('');
-    setNewPlaylistIsPublic(false);
-    setIsCreateDialogOpen(false);
+  const create = () => {
+    if (!newName.trim()) return;
+    const pl = {
+      id: Date.now().toString(),
+      name: newName,
+      description: newDesc || 'Curated collection',
+      thumbnail: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=340&fit=crop',
+      contentIds: [],
+      createdDate: new Date().toISOString().split('T')[0],
+      isPublic: false,
+    };
+    setPlaylists([pl, ...playlists]);
+    setNewName(''); setNewDesc(''); setOpen(false);
   };
-
-  const handleDeletePlaylist = (id: string) => {
-    if (confirm('Are you sure you want to delete this playlist?')) {
-      deletePlaylist(id);
-      toast({
-        title: 'Success',
-        description: 'Playlist deleted successfully',
-      });
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6 p-4 md:p-0">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Playlists</h1>
-        </div>
-        <p className="text-center text-muted-foreground">Loading playlists...</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6 p-4 md:p-0">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">My Playlists</h1>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
-              {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
-            </Button>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Create Playlist
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Playlist</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="playlist-name">Playlist Name</Label>
-                    <Input
-                      id="playlist-name"
-                      value={newPlaylistName}
-                      onChange={(e) => setNewPlaylistName(e.target.value)}
-                      placeholder="e.g., Morning Devotion"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="playlist-description">Description</Label>
-                    <Input
-                      id="playlist-description"
-                      value={newPlaylistDescription}
-                      onChange={(e) => setNewPlaylistDescription(e.target.value)}
-                      placeholder="Optional description"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="playlist-public">Public Playlist</Label>
-                    <Switch
-                      id="playlist-public"
-                      checked={newPlaylistIsPublic}
-                      onCheckedChange={setNewPlaylistIsPublic}
-                    />
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Public playlists can be seen by other users
-                  </p>
-                </div>
-                <Button onClick={handleCreatePlaylist} className="w-full">
-                  Create Playlist
-                </Button>
-              </DialogContent>
-            </Dialog>
+    <div className="space-y-8 max-w-[1100px] mx-auto">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="px-2.5 py-1 rounded-full bg-foreground text-background font-mono text-[10px] tracking-[0.15em] uppercase">Playlists • {playlists.length}</span>
+            <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground flex items-center gap-1"><List className="w-3 h-3" /> Curated journeys</span>
           </div>
+          <h1 className="font-display text-[2.2rem] md:text-[3rem] leading-[0.9] tracking-[-0.03em]">Your <span className="italic font-[300] text-muted-foreground">collections.</span></h1>
         </div>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search playlists..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 max-w-md"
-          />
-        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button className="rounded-full bg-foreground text-background font-[600] h-10 px-5 gap-1"><Plus className="w-4 h-4" /> New playlist</Button></DialogTrigger>
+          <DialogContent className="rounded-[1.5rem]"><DialogHeader><DialogTitle className="font-display text-[1.4rem]">Create playlist</DialogTitle></DialogHeader>
+            <div className="space-y-4 pt-2">
+              <Input placeholder="Playlist name" value={newName} onChange={e=>setNewName(e.target.value)} className="h-11 rounded-full" />
+              <Textarea placeholder="Description (optional)" value={newDesc} onChange={e=>setNewDesc(e.target.value)} className="rounded-[1rem] min-h-[80px]" />
+              <Button onClick={create} className="w-full rounded-full bg-foreground text-background h-11 font-[600]">Create playlist</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {filteredPlaylists.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground mb-4">No playlists found</p>
-          {searchQuery ? (
-            <Button variant="outline" onClick={() => setSearchQuery('')}>Clear search</Button>
-          ) : (
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Your First Playlist
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
-          {filteredPlaylists.map((playlist) => (
-            <Card key={playlist.id} className={viewMode === 'list' ? 'flex items-center gap-4 p-4' : ''}>
-              <CardContent className={viewMode === 'grid' ? 'p-0' : 'p-0 flex-1'}>
-                {viewMode === 'grid' ? (
-                  <div className="space-y-4">
-                    <div className="relative">
-                      <img
-                        src={playlist.thumbnail}
-                        alt={playlist.name}
-                        className="w-full h-40 object-cover rounded-t-lg"
-                      />
-                      <Badge 
-                        variant="secondary" 
-                        className="absolute top-2 right-2 gap-1"
-                      >
-                        {playlist.isPublic ? (
-                          <><Globe className="h-3 w-3" /> Public</>
-                        ) : (
-                          <><Lock className="h-3 w-3" /> Private</>
-                        )}
-                      </Badge>
-                    </div>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-medium truncate">{playlist.name}</h3>
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => navigate(`/playlists/${playlist.id}`)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeletePlaylist(playlist.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">{playlist.description}</p>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>{getContentInPlaylist(playlist.id, allContent).length} items</span>
-                        <span>{new Date(playlist.updatedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-4 w-full">
-                    <img
-                      src={playlist.thumbnail}
-                      alt={playlist.name}
-                      className="w-16 h-16 object-cover rounded"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-medium truncate">{playlist.name}</h3>
-                        <Badge variant="secondary" className="gap-1">
-                          {playlist.isPublic ? (
-                            <><Globe className="h-3 w-3" /> Public</>
-                          ) : (
-                            <><Lock className="h-3 w-3" /> Private</>
-                          )}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">{playlist.description}</p>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                        <span>{getContentInPlaylist(playlist.id, allContent).length} items</span>
-                        <span>{new Date(playlist.updatedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => navigate(`/playlists/${playlist.id}`)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeletePlaylist(playlist.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+      <div className="relative max-w-[480px]">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input placeholder="Search playlists…" value={q} onChange={e=>setQ(e.target.value)} className="h-11 pl-11 rounded-full bg-card border-border/60" />
+      </div>
+
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {filtered.map((pl,i)=>(
+          <motion.div key={pl.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.05 }}>
+            <Card className="rounded-[1.5rem] border-border/50 overflow-hidden group hover:border-foreground/10 hover:shadow-[0_8px_24px_hsl(var(--foreground)/0.06)] transition-all">
+              <div className="aspect-[16/10] relative overflow-hidden bg-muted">
+                <img src={pl.thumbnail} alt={pl.name} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur text-[10px] font-mono uppercase font-[700] text-black">{pl.contentIds.length} teachings</div>
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><div className="w-12 h-12 rounded-full bg-white/90 backdrop-blur flex items-center justify-center shadow-xl"><Play className="w-5 h-5 fill-black text-black ml-0.5" /></div></div>
+              </div>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div><h3 className="font-[700] tracking-[-0.01em] leading-[1.2]">{pl.name}</h3><p className="text-[12px] text-muted-foreground mt-1 line-clamp-1">{pl.description}</p></div>
+                  <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full"><MoreHorizontal className="w-4 h-4" /></Button>
+                </div>
+                <div className="mt-3 font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground">Created {pl.createdDate} • {pl.isPublic ? 'Public' : 'Private'}</div>
               </CardContent>
             </Card>
-          ))}
+          </motion.div>
+        ))}
+      </div>
+
+      {filtered.length===0 && (
+        <div className="py-20 text-center rounded-[1.5rem] border border-dashed border-border/60 bg-secondary/20">
+          <p className="font-[600]">No playlists found</p>
+          <p className="text-[13px] text-muted-foreground mt-1">Create your first playlist — happy path, always works.</p>
         </div>
       )}
-
-      <div className="space-y-6">
-        {recentPlaylists.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Recently Updated</h2>
-              <Link to="/playlists" className="text-sm text-primary hover:underline">
-                View All
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {recentPlaylists.map((playlist) => (
-                <Card key={playlist.id} className="cursor-pointer hover:shadow-lg transition-shadow" 
-                      onClick={() => navigate(`/playlists/${playlist.id}`)}>
-                  <CardContent className="p-0">
-                    <div className="relative">
-                      <img
-                        src={playlist.thumbnail}
-                        alt={playlist.name}
-                        className="w-full h-40 object-cover rounded-t-lg"
-                      />
-                      <Badge variant="secondary" className="absolute top-2 right-2 gap-1">
-                        {playlist.isPublic ? (
-                          <><Globe className="h-3 w-3" /> Public</>
-                        ) : (
-                          <><Lock className="h-3 w-3" /> Private</>
-                        )}
-                      </Badge>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-medium truncate mb-1">{playlist.name}</h3>
-                      <p className="text-sm text-muted-foreground truncate mb-2">{playlist.description}</p>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>{getContentInPlaylist(playlist.id, allContent).length} items</span>
-                        <span>{new Date(playlist.updatedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {popularPlaylists.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Most Popular</h2>
-              <Link to="/playlists" className="text-sm text-primary hover:underline">
-                View All
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {popularPlaylists.map((playlist) => (
-                <Card key={playlist.id} className="cursor-pointer hover:shadow-lg transition-shadow" 
-                      onClick={() => navigate(`/playlists/${playlist.id}`)}>
-                  <CardContent className="p-0">
-                    <div className="relative">
-                      <img
-                        src={playlist.thumbnail}
-                        alt={playlist.name}
-                        className="w-full h-40 object-cover rounded-t-lg"
-                      />
-                      <Badge variant="secondary" className="absolute top-2 right-2 gap-1">
-                        {playlist.isPublic ? (
-                          <><Globe className="h-3 w-3" /> Public</>
-                        ) : (
-                          <><Lock className="h-3 w-3" /> Private</>
-                        )}
-                      </Badge>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-medium truncate mb-1">{playlist.name}</h3>
-                      <p className="text-sm text-muted-foreground truncate mb-2">{playlist.description}</p>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>{getContentInPlaylist(playlist.id, allContent).length} items</span>
-                        <span>{new Date(playlist.updatedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {publicPlaylists.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Community Playlists</h2>
-              <Link to="/playlists/community" className="text-sm text-primary hover:underline">
-                Browse All
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {publicPlaylists.slice(0, 3).map((playlist) => (
-                <Card key={playlist.id} className="cursor-pointer hover:shadow-lg transition-shadow" 
-                      onClick={() => navigate(`/playlists/${playlist.id}`)}>
-                  <CardContent className="p-0">
-                    <div className="relative">
-                      <img
-                        src={playlist.thumbnail}
-                        alt={playlist.name}
-                        className="w-full h-40 object-cover rounded-t-lg"
-                      />
-                      <Badge variant="secondary" className="absolute top-2 right-2 gap-1">
-                        <Users className="h-3 w-3" /> {playlist.createdBy}
-                      </Badge>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-medium truncate mb-1">{playlist.name}</h3>
-                      <p className="text-sm text-muted-foreground truncate mb-2">{playlist.description}</p>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>{getContentInPlaylist(playlist.id, allContent).length} items</span>
-                        <span>{new Date(playlist.updatedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

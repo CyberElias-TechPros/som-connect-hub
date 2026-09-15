@@ -1,332 +1,132 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Heart, Plus, Play, Lock, Loader2, Search } from 'lucide-react';
-import { conferences, podcasts, originals, playlists, ContentItem, Playlist } from '@/lib/mock-data';
-import { ContentGuard } from '@/components/auth/PermissionGuard';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Heart, Play, Search, Clock, Eye, Sparkles, Filter, ArrowUpRight } from 'lucide-react';
+import { conferences, podcasts, originals, featuredContent, ContentItem } from '@/lib/mock-data';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const allContent = [...conferences, ...podcasts, ...originals];
+const allContent = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
 
 export default function Library() {
-  const [favorites, setFavorites] = useState<ContentItem[]>(allContent.filter(c => c.isFavorited));
-  const [userPlaylists, setUserPlaylists] = useState<Playlist[]>(playlists);
-  const [newPlaylistName, setNewPlaylistName] = useState('');
-  const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
-  const [visibleItems, setVisibleItems] = useState<ContentItem[]>([]);
-  const [loadedItems, setLoadedItems] = useState(12);
-  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const observerRef = useRef<HTMLDivElement | null>(null);
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('som_favs')||'[]'); } catch { return []; }
+  });
 
-  // Filter content based on active tab and search query
-  const getFilteredContent = useCallback((): ContentItem[] => {
-    let filteredContent: ContentItem[];
-    
-    switch (activeTab) {
-      case 'conferences': filteredContent = conferences; break;
-      case 'podcasts': filteredContent = podcasts; break;
-      case 'originals': filteredContent = originals; break;
-      case 'favorites': filteredContent = favorites; break;
-      default: filteredContent = allContent;
-    }
-    
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      return filteredContent.filter(item =>
-        item.title.toLowerCase().includes(query) ||
-        item.speaker.name.toLowerCase().includes(query) ||
-        item.tags.some(tag => tag.toLowerCase().includes(query))
-      );
-    }
-    
-    return filteredContent;
-  }, [activeTab, favorites, searchQuery]);
+  const filtered = useMemo(() => {
+    let base: ContentItem[] = allContent;
+    if (activeTab === 'conferences') base = conferences;
+    else if (activeTab === 'podcasts') base = podcasts;
+    else if (activeTab === 'originals') base = originals;
+    else if (activeTab === 'favorites') base = allContent.filter(c=>favorites.includes(c.id));
+    if (!searchQuery.trim()) return base;
+    const q = searchQuery.toLowerCase();
+    return base.filter(c=> c.title.toLowerCase().includes(q) || c.speaker.name.toLowerCase().includes(q) || c.tags.some(t=>t.toLowerCase().includes(q)));
+  }, [activeTab, searchQuery, favorites]);
 
-  // Load more items when scrolling
-  const loadMoreItems = useCallback(() => {
-    if (loading) return;
-    
-    setLoading(true);
-    setTimeout(() => {
-      const filteredContent = getFilteredContent();
-      const newVisibleItems = filteredContent.slice(0, loadedItems + 12);
-      setVisibleItems(newVisibleItems);
-      setLoadedItems(prev => prev + 12);
-      setLoading(false);
-    }, 500); // Simulate network delay
-  }, [loading, loadedItems, getFilteredContent]);
-
-  // Initialize visible items
-  useEffect(() => {
-    const filteredContent = getFilteredContent();
-    const initialItems = filteredContent.slice(0, 12);
-    setVisibleItems(initialItems);
-    setLoadedItems(12);
-  }, [activeTab, getFilteredContent]);
-
-  // Intersection observer for infinite scroll
-  useEffect(() => {
-    if (!observerRef.current) return;
-    
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          loadMoreItems();
-        }
-      },
-      { threshold: 0.1 }
-    );
-    
-    observer.observe(observerRef.current);
-    
-    return () => {
-      if (observerRef.current) {
-        observer.unobserve(observerRef.current);
-      }
-    };
-  }, [loadMoreItems]);
-
-  const toggleFavorite = (content: ContentItem) => {
+  const toggleFav = (id: string, e?: React.MouseEvent) => {
+    e?.preventDefault(); e?.stopPropagation();
     setFavorites(prev => {
-      const isFav = prev.some(f => f.id === content.id);
-      if (isFav) {
-        return prev.filter(f => f.id !== content.id);
-      } else {
-        return [...prev, content];
-      }
+      const next = prev.includes(id) ? prev.filter(f=>f!==id) : [...prev, id];
+      localStorage.setItem('som_favs', JSON.stringify(next));
+      return next;
     });
   };
 
-  const createPlaylist = () => {
-    if (newPlaylistName.trim()) {
-      const newPlaylist: Playlist = {
-        id: Date.now().toString(),
-        name: newPlaylistName,
-        description: newPlaylistDesc,
-        thumbnail: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=340&fit=crop',
-        contentIds: [],
-        createdDate: new Date().toISOString().split('T')[0],
-        isPublic: false,
-      };
-      setUserPlaylists(prev => [...prev, newPlaylist]);
-      setNewPlaylistName('');
-      setNewPlaylistDesc('');
-      setIsCreateDialogOpen(false);
-    }
-  };
-
-  const ContentCard = ({ content }: { content: ContentItem }) => (
-    <ContentGuard isPremium={content.isPremium}>
-      <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
-        <div className="relative aspect-video">
-          <img 
-            src={content.thumbnail} 
-            alt={content.title} 
-            className="w-full h-full object-cover" 
-            loading="lazy"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.src = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=340&fit=crop';
-            }}
-          />
-          {content.isPremium && <Badge className="absolute top-2 right-2 bg-accent">Premium</Badge>}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="absolute top-2 left-2 bg-black/50 hover:bg-black/70 text-white"
-            onClick={(e) => {
-              e.preventDefault();
-              toggleFavorite(content);
-            }}
-            aria-label={favorites.some(f => f.id === content.id) ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <Heart className={`h-4 w-4 ${favorites.some(f => f.id === content.id) ? 'fill-red-500 text-red-500' : ''}`} />
-          </Button>
-          <span className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">{content.duration}</span>
-        </div>
-        <CardContent className="p-4">
-          <h3 className="font-semibold line-clamp-1">{content.title}</h3>
-          <p className="text-sm text-muted-foreground">{content.speaker.name}</p>
-          <div className="flex flex-wrap gap-1 mt-2">
-            {content.tags.slice(0, 2).map(tag => (
-              <Badge key={tag} variant="secondary" className="text-xs">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </ContentGuard>
-  );
-
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-  };
-
-  const filteredContent = getFilteredContent();
-  const hasMoreItems = visibleItems.length < filteredContent.length;
-
   return (
-    <div className="space-y-6 p-4 md:p-0">
-      <h1 className="text-2xl font-bold">Library</h1>
-      
-      {/* Search bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search content..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-          aria-label="Search content"
-        />
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-2.5 py-1 rounded-full bg-foreground text-background font-mono text-[10px] tracking-[0.15em] uppercase">Library • {allContent.length} teachings</span>
+              <span className="hidden md:flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground"><Sparkles className="w-3 h-3" /> Curated for growth</span>
+            </div>
+            <h1 className="font-display text-[2.2rem] md:text-[3rem] leading-[0.9] tracking-[-0.03em] text-balance">Explore the <span className="italic font-[300] text-muted-foreground">Word, deeply.</span></h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border/50 font-mono text-[10px] tracking-[0.1em] uppercase"><Filter className="w-3 h-3" /> Filters active</div>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative group max-w-[560px]">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-foreground transition-colors" />
+          <Input placeholder="Search teachings, speakers, topics, scriptures…" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} className="h-12 pl-11 pr-4 rounded-full bg-card border-border/60 focus-visible:border-foreground/20 focus-visible:ring-2 focus-visible:ring-foreground/10 text-[14px]" />
+          {searchQuery && <button onClick={()=>setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground">×</button>}
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="h-auto p-1.5 rounded-full bg-secondary/70 border border-border/50 flex-wrap justify-start gap-1">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'conferences', label: 'Conferences' },
+              { id: 'podcasts', label: 'Podcasts' },
+              { id: 'originals', label: 'Originals' },
+              { id: 'favorites', label: `Favorites ${favorites.length ? `• ${favorites.length}` : ''}` },
+            ].map(t=>(
+              <TabsTrigger key={t.id} value={t.id} className="rounded-full px-4 py-2 text-[13px] font-[600] tracking-[-0.01em] data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all">{t.label}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="w-full justify-start overflow-x-auto">
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="conferences">Conferences</TabsTrigger>
-          <TabsTrigger value="podcasts">Podcasts</TabsTrigger>
-          <TabsTrigger value="originals">Originals</TabsTrigger>
-          <TabsTrigger value="playlists">Playlists</TabsTrigger>
-          <TabsTrigger value="favorites">Favorites</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {visibleItems.map(c => (
-              <Link key={c.id} to={`/library/${c.id}`} aria-label={`View ${c.title}`}>
-                <ContentCard content={c} />
-              </Link>
-            ))}
-          </div>
-          {hasMoreItems && (
-            <div ref={observerRef} className="flex justify-center py-6">
-              {loading ? (
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              ) : (
-                <Button variant="outline" onClick={loadMoreItems}>Load More</Button>
-              )}
-            </div>
-          )}
-          {!hasMoreItems && visibleItems.length > 0 && (
-            <p className="text-center text-muted-foreground py-6">
-              You've reached the end of the content
-            </p>
-          )}
-          {visibleItems.length === 0 && (
-            <p className="text-center text-muted-foreground py-6">
-              No content found matching your search
-            </p>
-          )}
-        </TabsContent>
-
-        <TabsContent value="conferences" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {conferences.map(c => (
-              <Link key={c.id} to={`/library/${c.id}`} aria-label={`View ${c.title}`}>
-                <ContentCard content={c} />
-              </Link>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="podcasts" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {podcasts.map(c => (
-              <Link key={c.id} to={`/library/${c.id}`} aria-label={`View ${c.title}`}>
-                <ContentCard content={c} />
-              </Link>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="originals" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {originals.map(c => (
-              <Link key={c.id} to={`/library/${c.id}`} aria-label={`View ${c.title}`}>
-                <ContentCard content={c} />
-              </Link>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="playlists" className="space-y-4 mt-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Your Playlists</h2>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Playlist
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Playlist</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Input
-                    placeholder="Playlist name"
-                    value={newPlaylistName}
-                    onChange={(e) => setNewPlaylistName(e.target.value)}
-                    aria-label="Playlist name"
-                  />
-                  <Textarea
-                    placeholder="Description (optional)"
-                    value={newPlaylistDesc}
-                    onChange={(e) => setNewPlaylistDesc(e.target.value)}
-                    aria-label="Playlist description"
-                  />
-                  <Button onClick={createPlaylist} className="w-full">Create</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {userPlaylists.map(playlist => (
-              <Card key={playlist.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
-                <div className="relative aspect-video">
-                  <img src={playlist.thumbnail} alt={playlist.name} className="w-full h-full object-cover" loading="lazy" />
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <Button variant="secondary" aria-label={`Play all in ${playlist.name}`}>
-                      <Play className="h-4 w-4 mr-2" />
-                      Play All
-                    </Button>
+      {/* Grid */}
+      <AnimatePresence mode="wait">
+        <motion.div key={activeTab+searchQuery} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.4, ease: [0.16,1,0.3,1] }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.map((content, i)=>(
+            <motion.div key={content.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.04, duration: 0.5, ease: [0.16,1,0.3,1] }} className="group relative rounded-[1.5rem] overflow-hidden bg-card border border-border/50 hover:border-foreground/10 hover:shadow-[0_12px_32px_hsl(var(--foreground)/0.08)] transition-all duration-500">
+              <Link to={`/library/${content.id}`} className="block">
+                <div className="aspect-[16/10] relative overflow-hidden bg-muted">
+                  <img src={content.thumbnail} alt={content.title} className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-[1.2s] ease-[cubic-bezier(0.16,1,0.3,1)]" loading="lazy" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
+                  <div className="absolute top-3 left-3 flex gap-1.5">
+                    <span className="px-2.5 py-1 rounded-full bg-white/90 backdrop-blur text-[10px] font-mono tracking-[0.08em] uppercase font-[700] text-black">{content.category}</span>
+                    {content.isPremium && <span className="px-2.5 py-1 rounded-full bg-amber-300 text-[10px] font-mono tracking-[0.08em] uppercase font-[700] text-black">Premium</span>}
+                  </div>
+                  <button onClick={e=>toggleFav(content.id, e)} className={`absolute top-3 right-3 w-8 h-8 rounded-full backdrop-blur flex items-center justify-center transition-all ${favorites.includes(content.id) ? 'bg-white text-red-500' : 'bg-black/30 text-white hover:bg-white hover:text-red-500'}`}>
+                    <Heart className={`w-4 h-4 ${favorites.includes(content.id) ? 'fill-current' : ''}`} />
+                  </button>
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                    <span className="px-2 py-1 rounded-full bg-black/50 backdrop-blur text-white text-[11px] font-mono flex items-center gap-1"><Clock className="w-3 h-3" />{content.duration}</span>
+                    <div className="w-9 h-9 rounded-full bg-white/90 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-500 shadow-lg">
+                      <Play className="w-4 h-4 fill-black text-black ml-0.5" />
+                    </div>
                   </div>
                 </div>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold">{playlist.name}</h3>
-                  <p className="text-sm text-muted-foreground">{playlist.contentIds.length} items</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
+                <div className="p-5">
+                  <h3 className="font-[650] tracking-[-0.01em] leading-[1.25] line-clamp-2 text-[15px] group-hover:tracking-[-0.015em] transition-all">{content.title}</h3>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                      <img src={content.speaker.avatar} alt={content.speaker.name} className="w-6 h-6 rounded-full object-cover" />
+                      <span className="truncate max-w-[14ch]">{content.speaker.name}</span>
+                    </div>
+                    <span className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground"><Eye className="w-3 h-3" />{content.views.toLocaleString()}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {content.tags.slice(0,2).map(tag=><span key={tag} className="px-2 py-1 rounded-full bg-secondary text-[10px] font-mono tracking-[0.05em] uppercase">{tag}</span>)}
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </motion.div>
+      </AnimatePresence>
 
-        <TabsContent value="favorites" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {favorites.length === 0 ? (
-              <p className="text-center text-muted-foreground col-span-full">No favorites yet</p>
-            ) : (
-              favorites.map(c => (
-                <Link key={c.id} to={`/library/${c.id}`} aria-label={`View ${c.title}`}>
-                  <ContentCard content={c} />
-                </Link>
-              ))
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+      {filtered.length===0 && (
+        <div className="py-24 text-center space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-secondary flex items-center justify-center"><Search className="w-6 h-6 text-muted-foreground" /></div>
+          <h3 className="font-display text-[1.5rem]">No results found</h3>
+          <p className="text-muted-foreground text-[14px] max-w-[36ch] mx-auto">Try different keywords, or browse all content. Every search is a happy path — try "faith" or "Pastor Chris".</p>
+          <Button onClick={()=>{setSearchQuery(''); setActiveTab('all');}} className="rounded-full">Clear search</Button>
+        </div>
+      )}
     </div>
   );
 }

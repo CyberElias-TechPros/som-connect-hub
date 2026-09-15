@@ -17,6 +17,9 @@ import {
   Download,
   Heart,
   List,
+  Search,
+  Flame,
+  Sparkles,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -26,27 +29,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useDeviceType } from "@/hooks/use-mobile";
 import somLogo from "@/images/som-logo.png";
 
-/* ------------------------------------------------------------------ */
-/* TYPES */
-/* ------------------------------------------------------------------ */
-
 interface DesktopSidebarProps {
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
 }
 
-/* ------------------------------------------------------------------ */
-/* NAV CONFIG */
-/* ------------------------------------------------------------------ */
-
 const mainNavItems = [
-  { to: "/", icon: Home, label: "Home" },
-  { to: "/library", icon: Library, label: "Library" },
-  { to: "/tools", icon: BookOpen, label: "Daily Tools" },
-  { to: "/community", icon: Users, label: "Community" },
-  { to: "/qa", icon: Users, label: "Q&A Sessions" },
-  { to: "/playlists", icon: List, label: "Playlists" },
-  { to: "/favorites", icon: Heart, label: "Favorites" },
+  { to: "/", icon: Home, label: "Home", desc: "Overview" },
+  { to: "/library", icon: Library, label: "Library", desc: "Teachings" },
+  { to: "/tools", icon: BookOpen, label: "Daily Tools", desc: "Confessions" },
+  { to: "/community", icon: Users, label: "Community", desc: "Connect" },
+  { to: "/qa", icon: Search, label: "Q&A Sessions", desc: "Live" },
+  { to: "/playlists", icon: List, label: "Playlists", desc: "Curated" },
+  { to: "/favorites", icon: Heart, label: "Favorites", desc: "Saved" },
 ];
 
 const accountNavItems = [
@@ -60,30 +55,28 @@ const accountNavItems = [
 
 const adminNavItems = [
   { to: "/admin", icon: Shield, label: "Dashboard" },
-  { to: "/admin/user-management", icon: Users, label: "User Management" },
-  { to: "/admin/moderation", icon: Shield, label: "Content Moderation" },
+  { to: "/admin/users", icon: Users, label: "Users" },
+  { to: "/admin/moderation", icon: Shield, label: "Moderation" },
 ];
-
-/* ------------------------------------------------------------------ */
-/* HELPERS */
-/* ------------------------------------------------------------------ */
 
 function useIsActive(path: string) {
   const { pathname } = useLocation();
   if (path === "/") return pathname === "/";
-  return new RegExp(`^${path}(/|$)`).test(pathname);
+  return pathname === path || pathname.startsWith(`${path}/`);
 }
 
 function SidebarItem({
   to,
   icon: Icon,
   label,
+  desc,
   collapsed,
   section,
 }: {
   to: string;
   icon: React.ElementType;
   label: string;
+  desc?: string;
   collapsed: boolean;
   section: string;
 }) {
@@ -93,526 +86,171 @@ function SidebarItem({
     <NavLink
       to={to}
       aria-current={active ? "page" : undefined}
-      aria-label={label}
       className={cn(
-        "relative flex items-center gap-3 rounded-lg px-3 py-2.5",
-        "transition-colors focus:outline-none focus-visible:ring-2",
+        "group relative flex items-center gap-3 rounded-[0.9rem] px-3 py-2.5 transition-all duration-300",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         active
-          ? "bg-sidebar-primary text-sidebar-primary-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent"
+          ? "bg-foreground text-background shadow-[0_4px_16px_hsl(var(--foreground)/0.15)]"
+          : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
       )}
     >
       {active && (
-        <motion.span
-          layoutId={`sidebar-indicator-${section}`}
-          className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-accent"
+        <motion.div
+          layoutId={`sidebar-dot-${section}`}
+          className="absolute right-3 w-1.5 h-1.5 rounded-full bg-accent"
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
         />
       )}
-
-      <Icon className="h-5 w-5 shrink-0" aria-hidden />
-
+      <div className={cn(
+        "w-8 h-8 rounded-[0.6rem] flex items-center justify-center shrink-0 transition-colors",
+        active ? "bg-white/10" : "bg-secondary group-hover:bg-card border border-transparent group-hover:border-border/50"
+      )}>
+        <Icon className="h-[16px] w-[16px]" />
+      </div>
       {!collapsed && (
-        <span className="truncate font-medium">{label}</span>
+        <div className="flex-1 min-w-0 text-left">
+          <div className="flex items-center gap-2">
+            <span className="text-[13.5px] font-[600] tracking-[-0.01em] truncate">{label}</span>
+            {desc && !active && (
+              <span className="hidden xl:inline font-mono text-[10px] tracking-[0.05em] uppercase opacity-60">{desc}</span>
+            )}
+          </div>
+        </div>
       )}
     </NavLink>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* COMPONENT */
-/* ------------------------------------------------------------------ */
-
-export function DesktopSidebar({
-  collapsed,
-  onCollapsedChange,
-}: DesktopSidebarProps) {
-  const { hasRole, isLoading } = useAuth();
-  const { isTablet, isDesktop } = useDeviceType();
-
-  const expandedWidth = isDesktop ? 256 : 192; // lg:w-64 : w-48
+export function DesktopSidebar({ collapsed, onCollapsedChange }: DesktopSidebarProps) {
+  const { user, hasRole } = useAuth();
+  const { isDesktop } = useDeviceType();
+  const expandedWidth = isDesktop ? 280 : 260;
 
   return (
     <aside
       className={cn(
-        "sticky top-0 z-40 flex h-screen flex-col border-r bg-sidebar transition-[width]"
+        "sticky top-0 z-40 flex h-screen flex-col bg-card border-r border-border/50",
+        "transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
       )}
-      style={{ width: collapsed ? '64px' : `${expandedWidth}px` }}
+      style={{ width: collapsed ? '72px' : `${expandedWidth}px` }}
       aria-label="Primary navigation"
     >
-      {/* Header / Logo */}
-      <div className="flex h-16 items-center justify-center border-b px-4">
-        <img
-          src={somLogo}
-          alt="SOM Connect"
-          className={cn(
-            "h-10 w-10 transition-transform",
-            collapsed ? "scale-100" : "scale-110"
-          )}
-        />
+      {/* Header */}
+      <div className="h-[64px] flex items-center gap-3 px-4 border-b border-border/50 shrink-0">
+        <div className="w-9 h-9 rounded-[0.8rem] bg-foreground flex items-center justify-center shadow-sm shrink-0">
+          <img src={somLogo} alt="SOM" className="w-5 h-5 invert dark:invert-0" />
+        </div>
         {!collapsed && (
-          <span className="ml-2 font-semibold">SOM CONNECT</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-display text-[1.05rem] tracking-[-0.02em]">SOM CONNECT</span>
+              <span className="font-mono text-[9px] tracking-[0.15em] uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground">PRO</span>
+            </div>
+            <div className="font-mono text-[10px] tracking-[0.08em] uppercase text-muted-foreground -mt-0.5">School of Ministry</div>
+          </div>
         )}
+        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-full ml-auto shrink-0" onClick={() => onCollapsedChange(!collapsed)}>
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </Button>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 overflow-y-auto py-4">
-        <div className="px-3 pb-2 text-xs font-semibold uppercase text-muted-foreground">
-          {!collapsed && "Main"}
+      {/* Streak card */}
+      {!collapsed && user && (
+        <div className="p-3">
+          <div className="rounded-[1rem] bg-gradient-to-br from-foreground to-foreground/80 text-background p-4 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-accent/20 to-transparent rounded-full blur-2xl" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur flex items-center justify-center">
+                <Flame className="w-5 h-5 text-accent" />
+              </div>
+              <div>
+                <div className="font-display text-[1.3rem] leading-none">{user.streak} days</div>
+                <div className="font-mono text-[10px] tracking-[0.1em] uppercase opacity-70">Current streak</div>
+              </div>
+              <div className="ml-auto w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+                <Sparkles className="w-3 h-3" />
+              </div>
+            </div>
+          </div>
         </div>
+      )}
 
-        <ul className="space-y-1 px-2">
-          {mainNavItems.map((item) => (
-            <li key={item.to}>
-              <SidebarItem
-                {...item}
-                collapsed={collapsed}
-                section="main"
-              />
-            </li>
-          ))}
-        </ul>
-
-        {hasRole(["pastor", "admin"]) && !isLoading && (
-          <>
-            <Separator className="my-4" />
-            <ul className="space-y-1 px-2">
-              <SidebarItem
-                to="/upload"
-                icon={Upload}
-                label="Upload Content"
-                collapsed={collapsed}
-                section="content"
-              />
-            </ul>
-          </>
-        )}
-
-        {hasRole(["admin"]) && !isLoading && (
-          <>
-            <Separator className="my-4" />
-            <ul className="space-y-1 px-2">
-              {adminNavItems.map((item) => (
+      {/* Navigation */}
+      <div className="flex-1 overflow-y-auto scrollbar-hide py-2">
+        <div className="px-3 space-y-6">
+          <div>
+            {!collapsed && <div className="px-3 pb-2 font-mono text-[10px] tracking-[0.15em] uppercase text-muted-foreground/70">Discover</div>}
+            <ul className="space-y-1">
+              {mainNavItems.map(item => (
                 <li key={item.to}>
-                  <SidebarItem
-                    {...item}
-                    collapsed={collapsed}
-                    section="admin"
-                  />
+                  <SidebarItem {...item} collapsed={collapsed} section="main" />
                 </li>
               ))}
             </ul>
-          </>
-        )}
+          </div>
 
-        <Separator className="my-4" />
-
-        <ul className="space-y-1 px-2">
-          {accountNavItems.map((item) => (
-            <li key={item.to}>
-              <SidebarItem
-                {...item}
-                collapsed={collapsed}
-                section="account"
-              />
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Collapse Toggle */}
-      <div className="border-t p-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onCollapsedChange(!collapsed)}
-          aria-expanded={!collapsed}
-          aria-controls="sidebar"
-          className="w-full justify-center"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" aria-hidden />
-          ) : (
+          {hasRole(["pastor", "admin"]) && (
             <>
-              <ChevronLeft className="mr-2 h-4 w-4" aria-hidden />
-              <span>Collapse</span>
+              <Separator className="bg-border/50" />
+              <div>
+                {!collapsed && <div className="px-3 pb-2 font-mono text-[10px] tracking-[0.15em] uppercase text-muted-foreground/70">Creator</div>}
+                <ul className="space-y-1">
+                  <li>
+                    <SidebarItem to="/upload" icon={Upload} label="Upload" desc="Content" collapsed={collapsed} section="creator" />
+                  </li>
+                </ul>
+              </div>
             </>
           )}
-        </Button>
+
+          {hasRole(["admin"]) && (
+            <>
+              <Separator className="bg-border/50" />
+              <div>
+                {!collapsed && <div className="px-3 pb-2 font-mono text-[10px] tracking-[0.15em] uppercase text-muted-foreground/70">Admin</div>}
+                <ul className="space-y-1">
+                  {adminNavItems.map(item => (
+                    <li key={item.to}>
+                      <SidebarItem {...item} collapsed={collapsed} section="admin" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+
+          <Separator className="bg-border/50" />
+          <div>
+            {!collapsed && <div className="px-3 pb-2 font-mono text-[10px] tracking-[0.15em] uppercase text-muted-foreground/70">Account</div>}
+            <ul className="space-y-1">
+              {accountNavItems.map(item => (
+                <li key={item.to}>
+                  <SidebarItem {...item} collapsed={collapsed} section="account" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="p-3 border-t border-border/50">
+        {!collapsed ? (
+          <div className="rounded-[0.9rem] bg-secondary/60 border border-border/50 p-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-accent-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-[650] tracking-[-0.01em]">Upgrade to Premium</div>
+              <div className="text-[11px] text-muted-foreground">Unlock all features</div>
+            </div>
+          </div>
+        ) : (
+          <div className="w-10 h-10 mx-auto rounded-full bg-accent/15 flex items-center justify-center">
+            <Sparkles className="w-4 h-4" />
+          </div>
+        )}
       </div>
     </aside>
   );
 }
-
-
-// import React from 'react';
-// import { NavLink, useLocation } from 'react-router-dom';
-// import {
-//   Home, Library, BookOpen, Users, User, Settings,
-//   ChevronLeft, ChevronRight, Shield, Upload, HelpCircle,
-//   Bell, CreditCard, Download, Heart, List
-// } from 'lucide-react';
-// import { cn } from '@/lib/utils';
-// import { Button } from '@/components/ui/button';
-// import { Separator } from '@/components/ui/separator';
-// import { useAuth } from '@/contexts/AuthContext';
-// import { motion, AnimatePresence } from 'framer-motion';
-// import somLogo from '@/images/som-logo.png';
-
-// interface DesktopSidebarProps {
-//   collapsed: boolean;
-//   onCollapsedChange: (collapsed: boolean) => void;
-// }
-
-// const mainNavItems = [
-//   { to: '/', icon: Home, label: 'Home' },
-//   { to: '/library', icon: Library, label: 'Library' },
-//   { to: '/tools', icon: BookOpen, label: 'Daily Tools' },
-//   { to: '/community', icon: Users, label: 'Community' },
-//   { to: '/qa', icon: Users, label: 'Q&A Sessions' },
-//   { to: '/playlists', icon: List, label: 'Playlists' },
-//   { to: '/favorites', icon: Heart, label: 'Favorites' },
-// ];
-
-// const accountNavItems = [
-//   { to: '/profile', icon: User, label: 'Profile' },
-//   { to: '/notifications', icon: Bell, label: 'Notifications' },
-//   { to: '/offline', icon: Download, label: 'Offline' },
-//   { to: '/subscription', icon: CreditCard, label: 'Subscription' },
-//   { to: '/settings', icon: Settings, label: 'Settings' },
-//   { to: '/help', icon: HelpCircle, label: 'Help & FAQ' },
-// ];
-
-// const adminNavItems = [
-//   { to: '/admin', icon: Shield, label: 'Dashboard' },
-//   { to: '/admin/user-management', icon: Users, label: 'User Management' },
-//   { to: '/admin/moderation', icon: Shield, label: 'Content Moderation' },
-// ];
-
-// export function DesktopSidebar({ collapsed, onCollapsedChange }: DesktopSidebarProps) {
-//   const location = useLocation();
-//   const { user, hasRole } = useAuth();
-
-//   const isActive = (path: string) => {
-//     return location.pathname === path || 
-//       (path !== '/' && location.pathname.startsWith(path));
-//   };
-
-//   return (
-//     <aside
-//       className={cn(
-//         "fixed left-0 top-0 h-screen bg-sidebar border-r border-sidebar-border",
-//         "flex flex-col transition-all duration-300 z-40"
-//       )}
-//       role="navigation"
-//       aria-label="Sidebar navigation"
-//     >
-//       {/* Logo */}
-//       <div className={cn(
-//         "flex items-center h-16 px-4 border-b border-sidebar-border",
-//         collapsed ? "justify-center" : "justify-between"
-//       )}>
-//         <AnimatePresence mode="wait">
-//           {!collapsed && (
-//             <motion.div
-//               initial={{ opacity: 0 }}
-//               animate={{ opacity: 1 }}
-//               exit={{ opacity: 0 }}
-//               className="flex items-center gap-2"
-//             >
-//               <img src={somLogo} alt="SOM Connect Logo" className="w-12 h-12 object-contain" />
-//               <span className="font-semibold text-sidebar-foreground">SOM CONNECT</span>
-//             </motion.div>
-//           )}
-//         </AnimatePresence>
-         
-//         {collapsed && (
-//           <img src={somLogo} alt="SOM Connect Logo" className="w-12 h-12 object-contain" />
-//         )}
-//       </div>
-
-//       {/* Navigation */}
-//       <nav className="flex-1 py-4 overflow-y-auto scrollbar-custom">
-//         <div className="px-3 mb-2">
-//           {!collapsed && (
-//             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3">
-//               Main
-//             </span>
-//           )}
-//         </div>
-        
-//         <motion.ul
-//           className="space-y-1 px-3"
-//           initial="collapsed"
-//           animate={!collapsed ? "expanded" : "collapsed"}
-//           variants={{
-//             expanded: {
-//               transition: {
-//                 staggerChildren: 0.05,
-//                 delayChildren: 0.1
-//               }
-//             },
-//             collapsed: {}
-//           }}
-//         >
-//           {mainNavItems.map((item, index) => (
-//             <li key={item.to}>
-//               <motion.div
-//                 whileHover={{ scale: 1.02, x: 4 }}
-//                 whileTap={{ scale: 0.98 }}
-//                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
-//               >
-//                 <NavLink
-//                   to={item.to}
-//                   className={cn(
-//                     "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative",
-//                     "hover:bg-sidebar-accent group",
-//                     isActive(item.to)
-//                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
-//                       : "text-sidebar-foreground"
-//                   )}
-//                   title={collapsed ? item.label : undefined}
-//                   aria-current={isActive(item.to) ? 'page' : undefined}
-//                 >
-//                   {isActive(item.to) && (
-//                     <motion.div
-//                       layoutId="sidebarActiveIndicator"
-//                       className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-sidebar-accent rounded-r-full"
-//                       initial={{ scale: 0.8, opacity: 0 }}
-//                       animate={{ scale: 1, opacity: 1 }}
-//                       transition={{ type: "spring", stiffness: 600, damping: 25 }}
-//                     />
-//                   )}
-//                 <item.icon className={cn(
-//                   "w-5 h-5 flex-shrink-0",
-//                   isActive(item.to) && "text-sidebar-accent"
-//                 )} />
-//                 <AnimatePresence>
-//                   {!collapsed && (
-//                     <motion.span
-//                       initial={{ opacity: 0, width: 0 }}
-//                       animate={{ opacity: 1, width: 'auto' }}
-//                       exit={{ opacity: 0, width: 0 }}
-//                       className="font-medium truncate"
-//                     >
-//                       {item.label}
-//                     </motion.span>
-//                   )}
-//                 </AnimatePresence>
-//               </NavLink>
-//               </motion.div>
-//             </li>
-//           ))}
-//         </motion.ul>
-
-//         {/* Pastor Upload */}
-//         {hasRole(['pastor', 'admin']) && (
-//           <>
-//             <Separator className="my-6 mx-3" />
-//             <div className="px-3 mb-2">
-//               {!collapsed && (
-//                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3">
-//                   Content
-//                 </span>
-//               )}
-//             </div>
-//             <div className="px-3">
-//               <motion.div
-//                 variants={{
-//                   expanded: { opacity: 1, x: 0 },
-//                   collapsed: { opacity: 0, x: -20 }
-//                 }}
-//                 whileHover={{ scale: 1.02, x: 4 }}
-//                 whileTap={{ scale: 0.98 }}
-//                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
-//               >
-//                 <NavLink
-//                   to="/upload"
-//                   className={cn(
-//                     "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative",
-//                     "hover:bg-sidebar-accent group",
-//                     isActive('/upload')
-//                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
-//                       : "text-sidebar-foreground"
-//                   )}
-//                   title={collapsed ? 'Upload Content' : undefined}
-//                   aria-current={isActive('/upload') ? 'page' : undefined}
-//                 >
-//                   {isActive('/upload') && (
-//                     <motion.div
-//                       layoutId="sidebarActiveIndicator"
-//                       className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-sidebar-accent rounded-r-full"
-//                       initial={{ scale: 0.8, opacity: 0 }}
-//                       animate={{ scale: 1, opacity: 1 }}
-//                       transition={{ type: "spring", stiffness: 600, damping: 25 }}
-//                     />
-//                   )}
-//                   <Upload className={cn(
-//                     "w-5 h-5 flex-shrink-0",
-//                     isActive('/upload') && "text-sidebar-accent"
-//                   )} />
-//                   <AnimatePresence>
-//                     {!collapsed && (
-//                       <motion.span
-//                         initial={{ opacity: 0, width: 0 }}
-//                         animate={{ opacity: 1, width: 'auto' }}
-//                         exit={{ opacity: 0, width: 0 }}
-//                         className="font-medium truncate"
-//                       >
-//                         Upload Content
-//                       </motion.span>
-//                     )}
-//                   </AnimatePresence>
-//                 </NavLink>
-//               </motion.div>
-//             </div>
-//           </>
-//         )}
-
-//         {/* Admin */}
-//         {hasRole(['admin']) && (
-//           <>
-//             <Separator className="my-6 mx-3" />
-//             <div className="px-3 mb-2">
-//               {!collapsed && (
-//                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3">
-//                   Admin
-//                 </span>
-//               )}
-//             </div>
-//             <ul className="space-y-1 px-3">
-//               {adminNavItems.map((item) => (
-//                 <li key={item.to}>
-//                   <motion.div
-//                     whileHover={{ scale: 1.02, x: 4 }}
-//                     whileTap={{ scale: 0.98 }}
-//                     transition={{ type: "spring", stiffness: 400, damping: 20 }}
-//                   >
-//                     <NavLink
-//                       to={item.to}
-//                       className={cn(
-//                         "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative",
-//                         "hover:bg-sidebar-accent group",
-//                         isActive(item.to)
-//                           ? "bg-sidebar-primary text-sidebar-primary-foreground"
-//                           : "text-sidebar-foreground"
-//                       )}
-//                       title={collapsed ? item.label : undefined}
-//                       aria-current={isActive(item.to) ? 'page' : undefined}
-//                     >
-//                       {isActive(item.to) && (
-//                         <motion.div
-//                           layoutId="sidebarActiveIndicator"
-//                           className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-sidebar-accent rounded-r-full"
-//                           initial={{ scale: 0.8, opacity: 0 }}
-//                           animate={{ scale: 1, opacity: 1 }}
-//                           transition={{ type: "spring", stiffness: 600, damping: 25 }}
-//                         />
-//                       )}
-//                     <item.icon className="w-5 h-5 flex-shrink-0" />
-//                     <AnimatePresence>
-//                       {!collapsed && (
-//                         <motion.span
-//                           initial={{ opacity: 0, width: 0 }}
-//                           animate={{ opacity: 1, width: 'auto' }}
-//                           exit={{ opacity: 0, width: 0 }}
-//                           className="font-medium truncate"
-//                         >
-//                           {item.label}
-//                         </motion.span>
-//                       )}
-//                     </AnimatePresence>
-//                   </NavLink>
-//                   </motion.div>
-//                 </li>
-//               ))}
-//             </ul>
-//           </>
-//         )}
-
-//         <Separator className="my-6 mx-3" />
-        
-//         <div className="px-3 mb-2">
-//           {!collapsed && (
-//             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3">
-//               Account
-//             </span>
-//           )}
-//         </div>
-        
-//         <ul className="space-y-1 px-3">
-//           {accountNavItems.map((item) => (
-//             <li key={item.to}>
-//               <motion.div
-//                 whileHover={{ scale: 1.02, x: 4 }}
-//                 whileTap={{ scale: 0.98 }}
-//                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
-//               >
-//                 <NavLink
-//                   to={item.to}
-//                   className={cn(
-//                     "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative",
-//                     "hover:bg-sidebar-accent group",
-//                     isActive(item.to)
-//                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
-//                       : "text-sidebar-foreground"
-//                   )}
-//                   title={collapsed ? item.label : undefined}
-//                   aria-current={isActive(item.to) ? 'page' : undefined}
-//                 >
-//                   {isActive(item.to) && (
-//                     <motion.div
-//                       layoutId="sidebarActiveIndicator"
-//                       className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-sidebar-accent rounded-r-full"
-//                       initial={{ scale: 0.8, opacity: 0 }}
-//                       animate={{ scale: 1, opacity: 1 }}
-//                       transition={{ type: "spring", stiffness: 600, damping: 25 }}
-//                     />
-//                   )}
-//                 <item.icon className={cn(
-//                   "w-5 h-5 flex-shrink-0",
-//                   isActive(item.to) && "text-sidebar-accent"
-//                 )} />
-//                 <AnimatePresence>
-//                   {!collapsed && (
-//                     <motion.span
-//                       initial={{ opacity: 0, width: 0 }}
-//                       animate={{ opacity: 1, width: 'auto' }}
-//                       exit={{ opacity: 0, width: 0 }}
-//                       className="font-medium truncate"
-//                     >
-//                       {item.label}
-//                     </motion.span>
-//                   )}
-//                 </AnimatePresence>
-//               </NavLink>
-//               </motion.div>
-//             </li>
-//           ))}
-//         </ul>
-//       </nav>
-
-//       {/* Collapse toggle */}
-//       <div className="p-3 border-t border-sidebar-border">
-//         <Button
-//           variant="ghost"
-//           size="sm"
-//           onClick={() => onCollapsedChange(!collapsed)}
-//           className={cn(
-//             "w-full justify-center",
-//             !collapsed && "justify-start"
-//           )}
-//           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-//         >
-//           {collapsed ? (
-//             <ChevronRight className="w-4 h-4" />
-//           ) : (
-//             <>
-//               <ChevronLeft className="w-4 h-4 mr-2" />
-//               <span>Collapse</span>
-//             </>
-//           )}
-//         </Button>
-//       </div>
-//     </aside>
-//   );
-// }

@@ -1,1 +1,61 @@
-import React from 'react'; import { Link } from 'react-router-dom'; import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; import { Button } from '@/components/ui/button'; import { Input } from '@/components/ui/input'; import { Label } from '@/components/ui/label'; import { Textarea } from '@/components/ui/textarea'; import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; import { Upload as UploadIcon, Video, Mic, FileText, ChevronRight } from 'lucide-react'; export default function Upload() { return (<div className="space-y-6 p-4 md:p-0"><div className="flex items-center justify-between"><h1 className="text-2xl font-bold">Upload Content</h1><Link to="/submissions"><Button variant="outline" size="sm">View Submissions <ChevronRight className="w-4 h-4 ml-1" /></Button></Link></div><Card><CardHeader><CardTitle>New Upload</CardTitle></CardHeader><CardContent className="space-y-6"><div className="border-2 border-dashed rounded-lg p-8 text-center space-y-4"><UploadIcon className="w-12 h-12 mx-auto text-muted-foreground" /><div><p className="font-medium">Drop your file here or click to browse</p><p className="text-sm text-muted-foreground">MP4, MP3 up to 500MB</p></div><div className="flex justify-center gap-2"><Button variant="outline" className="gap-2"><Video className="w-4 h-4" />Video</Button><Button variant="outline" className="gap-2"><Mic className="w-4 h-4" />Audio</Button></div></div><div className="grid gap-4"><div><Label>Title</Label><Input placeholder="Enter content title" /></div><div><Label>Description</Label><Textarea placeholder="Describe your content..." rows={3} /></div><div className="grid grid-cols-2 gap-4"><div><Label>Category</Label><Select><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent><SelectItem value="service">Sunday Service</SelectItem><SelectItem value="teaching">Teaching</SelectItem><SelectItem value="testimony">Testimony</SelectItem></SelectContent></Select></div><div><Label>Scripture Reference</Label><Input placeholder="e.g., John 3:16" /></div></div><Button className="w-full">Submit for Review</Button></div></CardContent></Card></div>); }
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Upload as UploadIcon, CheckCircle, Sparkles } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+export default function Upload() {
+  const { toast } = useToast();
+  const [done, setDone] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    await new Promise(r=>setTimeout(r, 1000));
+    setDone(true);
+    setLoading(false);
+    toast({ title: 'Upload submitted', description: 'Your content is pending review — happy path, always succeeds.' });
+  };
+
+  if (done) {
+    return (
+      <div className="max-w-[600px] mx-auto py-12">
+        <Card className="rounded-[1.75rem] border-border/50 text-center p-8 space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center"><CheckCircle className="w-8 h-8 text-emerald-600" /></div>
+          <h2 className="font-display text-[1.8rem]">Upload successful</h2>
+          <p className="text-muted-foreground text-[14px]">Your teaching is now pending review. You can track it in submissions.</p>
+          <Button className="rounded-full bg-foreground text-background" onClick={()=>setDone(false)}>Upload another</Button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-[700px] mx-auto">
+      <div>
+        <div className="flex items-center gap-2 mb-3"><span className="px-2.5 py-1 rounded-full bg-foreground text-background font-mono text-[10px] tracking-[0.15em] uppercase">Creator upload</span><span className="font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground flex items-center gap-1"><Sparkles className="w-3 h-3" /> Happy path</span></div>
+        <h1 className="font-display text-[2.2rem] leading-[0.9] tracking-[-0.03em]">Share your <span className="italic font-[300] text-muted-foreground">teaching.</span></h1>
+      </div>
+
+      <Card className="rounded-[1.5rem] border-border/50">
+        <CardHeader><CardTitle className="flex items-center gap-2 text-[16px]"><UploadIcon className="w-4 h-4" /> Upload content</CardTitle></CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2"><Label className="font-[600] text-[13px]">Title</Label><Input required placeholder="The Power of Faith in Action" className="h-11 rounded-full bg-secondary/50" /></div>
+            <div className="space-y-2"><Label className="font-[600] text-[13px]">Description</Label><Textarea required placeholder="Describe your teaching…" className="rounded-[1rem] min-h-[100px] bg-secondary/50" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2"><Label className="font-[600] text-[13px]">Category</Label><Input placeholder="conference" className="h-11 rounded-full bg-secondary/50" /></div>
+              <div className="space-y-2"><Label className="font-[600] text-[13px]">Duration</Label><Input placeholder="1:24:30" className="h-11 rounded-full bg-secondary/50" /></div>
+            </div>
+            <div className="space-y-2"><Label className="font-[600] text-[13px]">Video file</Label><div className="h-32 rounded-[1rem] border-2 border-dashed border-border/60 bg-secondary/20 flex flex-col items-center justify-center gap-2"><UploadIcon className="w-6 h-6 text-muted-foreground" /><span className="text-[12px] text-muted-foreground">Drop file or click to browse • Demo</span></div></div>
+            <Button type="submit" disabled={loading} className="w-full h-12 rounded-full bg-foreground text-background font-[600]">{loading ? 'Uploading…' : 'Submit for review'}</Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

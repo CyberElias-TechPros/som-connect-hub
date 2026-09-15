@@ -1,1 +1,36 @@
-import React, { useState } from 'react'; import { Card, CardContent } from '@/components/ui/card'; import { Checkbox } from '@/components/ui/checkbox'; import { Button } from '@/components/ui/button'; import { Share2, Check } from 'lucide-react'; import { rorReadings, currentUser } from '@/lib/mock-data'; import { toast } from '@/components/ui/use-toast'; export default function RORPlan() { const ror = rorReadings[0]; const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({}); const [streak, setStreak] = useState(currentUser.streak); const toggleTaskCompletion = (taskId: string) => { setCompletedTasks(prev => ({ ...prev, [taskId]: !prev[taskId] })); }; const incrementStreak = () => { const newStreak = streak + 1; setStreak(newStreak); toast({ title: 'Streak Updated!', description: `Your streak is now ${newStreak} days! Keep going!`, }); }; const sharePlan = () => { const shareContent = `ROR Reading Plan: ${ror.title}\n\n${ror.content}\n\nShared from SOM Connect: ${window.location.href}`; navigator.clipboard.writeText(shareContent); toast({ title: 'Copied to clipboard!', description: 'Reading plan copied to clipboard for sharing.', }); }; const allTasksCompleted = Object.values(completedTasks).length > 0 && Object.values(completedTasks).every(Boolean); return (<div className="space-y-6 p-4 md:p-0"><div className="flex items-center justify-between"><h1 className="text-2xl font-bold">ROR Reading Plan</h1><div className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={sharePlan} aria-label="Share reading plan"><Share2 className="w-5 h-5" /></Button></div></div><Card><CardContent className="p-5 space-y-4"><h2 className="font-semibold">{ror.title}</h2><p className="text-sm text-muted-foreground">{ror.scriptureRef}</p><p className="text-muted-foreground">{ror.content}</p><div className="space-y-3"><h3 className="text-sm font-medium">Further Study</h3>{ror.furtherStudy.map((s, i) => (<div key={`study-${i}`} className="flex items-center gap-3"><Checkbox id={`study-${i}`} checked={completedTasks[`study-${i}`] || false} onCheckedChange={() => toggleTaskCompletion(`study-${i}`)} aria-label={`Mark ${s} as completed`} /><label htmlFor={`study-${i}`} className="text-sm">{s}</label></div>))}</div><div className="space-y-3"><h3 className="text-sm font-medium">Daily Scripture Reading</h3>{ror.dailyScriptureReading.map((s, i) => (<div key={`reading-${i}`} className="flex items-center gap-3"><Checkbox id={`reading-${i}`} checked={completedTasks[`reading-${i}`] || false} onCheckedChange={() => toggleTaskCompletion(`reading-${i}`)} aria-label={`Mark ${s} as completed`} /><label htmlFor={`reading-${i}`} className="text-sm">{s}</label></div>))}</div>{allTasksCompleted && (<div className="mt-4 p-3 bg-green-50 rounded-lg flex items-center gap-2" role="alert"><Check className="w-4 h-4 text-green-600" /><span className="text-sm text-green-700">All tasks completed! Your streak has been updated.</span></div>)}<Button className="w-full mt-4" onClick={incrementStreak} disabled={!allTasksCompleted} aria-label="Complete reading plan and update streak">Complete Reading Plan</Button></CardContent></Card></div>); }
+import React from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Check, Calendar, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+const plan = Array.from({ length: 30 }).map((_,i)=>({ day: i+1, title: `Day ${i+1}: Living in the Spirit`, done: i < 5, date: new Date(Date.now() + i*86400000).toLocaleDateString() }));
+
+export default function RORPlan() {
+  return (
+    <div className="space-y-8 max-w-[800px] mx-auto">
+      <div>
+        <div className="flex items-center gap-2 mb-3"><span className="px-2.5 py-1 rounded-full bg-foreground text-background font-mono text-[10px] tracking-[0.15em] uppercase">ROR Plan</span><span className="font-mono text-[10px] tracking-[0.1em] uppercase text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> 30-day journey</span></div>
+        <h1 className="font-display text-[2.2rem] md:text-[3rem] leading-[0.9] tracking-[-0.03em]">Rhapsody <span className="italic font-[300] text-muted-foreground">reading plan.</span></h1>
+      </div>
+
+      <div className="rounded-[1.5rem] bg-foreground text-background p-6 flex items-center gap-4">
+        <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center"><Sparkles className="w-6 h-6 text-amber-300" /></div>
+        <div><div className="font-display text-[1.4rem] leading-none">5 / 30 completed</div><div className="font-mono text-[11px] uppercase tracking-[0.05em] opacity-60 mt-1">Keep going — you’re building a habit</div></div>
+        <div className="ml-auto hidden md:block w-32 h-2 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-white" style={{ width: '16%' }} /></div>
+      </div>
+
+      <div className="grid gap-2">
+        {plan.map(d=>(
+          <Card key={d.day} className={`rounded-[1rem] border-border/50 ${d.done ? 'bg-secondary/40' : 'bg-card'}`}>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-[700] ${d.done ? 'bg-foreground text-background' : 'bg-secondary border border-border/50'}`}>{d.done ? <Check className="w-4 h-4" /> : d.day}</div>
+              <div className="flex-1"><div className="font-[600] text-[14px] tracking-[-0.01em]">{d.title}</div><div className="text-[11px] font-mono uppercase tracking-[0.05em] text-muted-foreground">{d.date}</div></div>
+              <Button variant="outline" size="sm" className="rounded-full h-8 px-4 font-[600]">{d.done ? 'Completed' : 'Start'}</Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
