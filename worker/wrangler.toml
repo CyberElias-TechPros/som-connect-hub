@@ -1,0 +1,59 @@
+name = "som-connect-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-27"
+compatibility_flags = ["nodejs_compat"]
+
+# Development
+[vars]
+ENV = "development"
+JWT_SECRET = "som-connect-dev-secret-change-in-prod"
+FRONTEND_URL = "http://localhost:8080"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "som-connect-db"
+database_id = "local-som-connect-db"
+
+# R2 Bucket for storage (videos, thumbnails, avatars, publications)
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "som-connect-storage"
+
+# KV Namespace for cache and config
+[[kv_namespaces]]
+binding = "CACHE"
+id = "local-cache-id"
+preview_id = "local-cache-preview-id"
+
+# Queue for background jobs (notifications, transcoding, emails)
+[[queues.producers]]
+binding = "QUEUE"
+queue = "som-connect-queue"
+
+[[queues.consumers]]
+queue = "som-connect-queue"
+max_batch_size = 10
+max_batch_timeout = 30
+
+# Durable Object for live Q&A coordination
+[[durable_objects.bindings]]
+name = "QA_SESSION"
+class_name = "QASessionDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["QASessionDurableObject"]
+
+# Cron for daily tasks
+[triggers]
+crons = ["0 0 * * *"] # Daily at midnight UTC
+
+# Routes for production (uncomment when deploying)
+# [[routes]]
+# pattern = "api.som-connect.com/*"
+# zone_name = "som-connect.com"
+
+# For local dev, allow all origins
+[dev]
+port = 8787

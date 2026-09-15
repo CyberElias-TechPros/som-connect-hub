@@ -1,7 +1,9 @@
 // Authentication Service — Happy Path Production Ready
 // Ensures every flow works end-to-end, no dead ends.
+// Now integrated with Cloudflare Workers API (VITE_API_URL) with localStorage fallback.
 
 import { User, UserRole, currentUser as mockCurrentUser } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
 
 const STORAGE_KEY = 'som_auth_v2';
 const TOKEN_KEY = 'som_token_v2';
@@ -97,74 +99,108 @@ export function extractUserFromToken(token: string): User | null {
 // Happy path login: accepts ANY email/password, returns a valid user
 // If email matches mockUsers, use that role, else create member user
 export async function login(email: string, password: string): Promise<{ user: User; token: string }> {
-  await new Promise(r => setTimeout(r, 700)); // realistic delay
+  return apiClient.tryApi(async () => {
+    const data = await apiClient.post<{ user: any; token: string }>('/auth/login', { email, password });
+    // Normalize API user to frontend User
+    const apiUser: User = {
+      id: data.user.id,
+      name: data.user.name,
+      email: data.user.email,
+      avatar: data.user.avatar,
+      role: data.user.role,
+      joinedDate: data.user.joinedDate || data.user.joined_date || new Date().toISOString().split('T')[0],
+      streak: data.user.streak || 0,
+      bio: data.user.bio,
+      affiliation: data.user.affiliation,
+    };
+    currentToken = data.token;
+    currentUserState = apiUser;
+    persistUser(apiUser, data.token);
+    return { user: apiUser, token: data.token };
+  }, async () => {
+    await new Promise(r => setTimeout(r, 700)); // realistic delay
 
-  const normalizedEmail = email.trim().toLowerCase();
-  
-  // Check mock users first for role demo
-  const mock = mockUsers[normalizedEmail] || mockUsers[email];
-  if (mock) {
-    // For demo convenience, accept any password for known emails, but try to validate if password matches
-    // Happy path: always succeed
-    const token = generateMockToken(mock.user);
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Check mock users first for role demo
+    const mock = mockUsers[normalizedEmail] || mockUsers[email];
+    if (mock) {
+      const token = generateMockToken(mock.user);
+      currentToken = token;
+      currentUserState = mock.user;
+      persistUser(mock.user, token);
+      return { user: mock.user, token };
+    }
+
+    const happyUser: User = {
+      id: `u_${Date.now()}`,
+      name: normalizedEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Believer',
+      email: normalizedEmail,
+      avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(normalizedEmail)}`,
+      role: 'member',
+      joinedDate: new Date().toISOString().split('T')[0],
+      streak: Math.floor(Math.random() * 20) + 1,
+      bio: 'Walking in faith and growing daily.',
+      affiliation: 'SOM Community',
+    };
+
+    const token = generateMockToken(happyUser);
     currentToken = token;
-    currentUserState = mock.user;
-    persistUser(mock.user, token);
-    return { user: mock.user, token };
-  }
+    currentUserState = happyUser;
+    persistUser(happyUser, token);
 
-  // For any other email, create a happy-path member user
-  // This ensures no dead ends
-  const happyUser: User = {
-    id: `u_${Date.now()}`,
-    name: normalizedEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Believer',
-    email: normalizedEmail,
-    avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(normalizedEmail)}`,
-    role: 'member',
-    joinedDate: new Date().toISOString().split('T')[0],
-    streak: Math.floor(Math.random() * 20) + 1,
-    bio: 'Walking in faith and growing daily.',
-    affiliation: 'SOM Community',
-  };
-
-  const token = generateMockToken(happyUser);
-  currentToken = token;
-  currentUserState = happyUser;
-  persistUser(happyUser, token);
-
-  return { user: happyUser, token };
+    return { user: happyUser, token };
+  });
 }
 
 export async function register(email: string, password: string, name: string, role: UserRole = 'member'): Promise<{ user: User; token: string }> {
-  await new Promise(r => setTimeout(r, 900));
+  return apiClient.tryApi(async () => {
+    const data = await apiClient.post<{ user: any; token: string }>('/auth/register', { email, password, name, affiliation: 'SOM Community' });
+    const apiUser: User = {
+      id: data.user.id,
+      name: data.user.name,
+      email: data.user.email,
+      avatar: data.user.avatar,
+      role: data.user.role,
+      joinedDate: data.user.joinedDate || new Date().toISOString().split('T')[0],
+      streak: data.user.streak || 1,
+      bio: data.user.bio,
+      affiliation: data.user.affiliation,
+    };
+    currentToken = data.token;
+    currentUserState = apiUser;
+    persistUser(apiUser, data.token);
+    return { user: apiUser, token: data.token };
+  }, async () => {
+    await new Promise(r => setTimeout(r, 900));
 
-  const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
 
-  // Happy path: if user exists, just log them in (no error dead end)
-  if (mockUsers[normalizedEmail]) {
-    return login(email, password);
-  }
+    if (mockUsers[normalizedEmail]) {
+      return login(email, password);
+    }
 
-  const newUser: User = {
-    id: `u_${Date.now()}`,
-    name: name.trim() || normalizedEmail.split('@')[0],
-    email: normalizedEmail,
-    avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(normalizedEmail)}`,
-    role,
-    joinedDate: new Date().toISOString().split('T')[0],
-    streak: 1,
-    bio: 'New member of SOM CONNECT family.',
-    affiliation: 'SOM Community',
-  };
+    const newUser: User = {
+      id: `u_${Date.now()}`,
+      name: name.trim() || normalizedEmail.split('@')[0],
+      email: normalizedEmail,
+      avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(normalizedEmail)}`,
+      role,
+      joinedDate: new Date().toISOString().split('T')[0],
+      streak: 1,
+      bio: 'New member of SOM CONNECT family.',
+      affiliation: 'SOM Community',
+    };
 
-  mockUsers[normalizedEmail] = { password, user: newUser };
+    mockUsers[normalizedEmail] = { password, user: newUser };
 
-  const token = generateMockToken(newUser);
-  currentToken = token;
-  currentUserState = newUser;
-  persistUser(newUser, token);
+    const token = generateMockToken(newUser);
+    currentToken = token;
+    currentUserState = newUser;
+    persistUser(newUser, token);
 
-  return { user: newUser, token };
+    return { user: newUser, token };
+  });
 }
 
 export function logout(): void {
@@ -212,17 +248,60 @@ export function hasPermission(permission: string): boolean {
 
 // Additional helpers for happy paths
 export async function requestPasswordReset(email: string): Promise<void> {
-  await new Promise(r => setTimeout(r, 800));
-  // Always succeed — happy path
-  return;
+  return apiClient.tryApi(async () => {
+    await apiClient.post('/auth/forgot', { email });
+  }, async () => {
+    await new Promise(r => setTimeout(r, 800));
+    return;
+  });
 }
 
 export async function updateProfile(updates: Partial<User>): Promise<User> {
-  await new Promise(r => setTimeout(r, 600));
-  const current = getCurrentUser();
-  if (!current) throw new Error('No user');
-  const updated = { ...current, ...updates };
-  currentUserState = updated;
-  persistUser(updated, currentToken || generateMockToken(updated));
-  return updated;
+  return apiClient.tryApi(async () => {
+    const data = await apiClient.put<any>('/auth/profile', updates);
+    const updated: User = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      avatar: data.avatar,
+      role: data.role,
+      joinedDate: data.joinedDate || data.joined_date,
+      streak: data.streak,
+      bio: data.bio,
+      affiliation: data.affiliation,
+    };
+    currentUserState = updated;
+    persistUser(updated, currentToken || generateMockToken(updated));
+    return updated;
+  }, async () => {
+    await new Promise(r => setTimeout(r, 600));
+    const current = getCurrentUser();
+    if (!current) throw new Error('No user');
+    const updated = { ...current, ...updates };
+    currentUserState = updated;
+    persistUser(updated, currentToken || generateMockToken(updated));
+    return updated;
+  });
+}
+
+export async function fetchMe(): Promise<User | null> {
+  return apiClient.tryApi(async () => {
+    const data = await apiClient.get<any>('/auth/me');
+    const user: User = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      avatar: data.avatar,
+      role: data.role,
+      joinedDate: data.joinedDate || data.joined_date,
+      streak: data.streak,
+      bio: data.bio,
+      affiliation: data.affiliation,
+    };
+    currentUserState = user;
+    persistUser(user, currentToken || '');
+    return user;
+  }, async () => {
+    return getCurrentUser();
+  });
 }

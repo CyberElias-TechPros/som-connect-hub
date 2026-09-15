@@ -1,6 +1,6 @@
 import { Notification } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
 
-// Mock notification service with real-time capabilities
 class NotificationService {
   private notifications: Notification[];
   private subscribers: ((notifications: Notification[]) => void)[];
@@ -12,46 +12,57 @@ class NotificationService {
     this.realtimeEnabled = false;
   }
 
-  // Initialize with existing notifications
   initialize(notifications: Notification[]): void {
     this.notifications = notifications;
     this.notifySubscribers();
+    this.syncFromApi().catch(()=>{});
   }
 
-  // Subscribe to notification updates
+  private async syncFromApi() {
+    if (!apiClient.hasApi) return;
+    try {
+      const data = await apiClient.get<{ items: any[], unreadCount: number }>('/notifications');
+      if (data.items?.length) {
+        this.notifications = data.items.map((n: any) => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          timestamp: n.created_at || n.timestamp,
+          isRead: !!n.is_read || !!n.isRead,
+          actionUrl: n.action_url || n.actionUrl,
+        }));
+        this.notifySubscribers();
+      }
+    } catch {}
+  }
+
   subscribe(callback: (notifications: Notification[]) => void): () => void {
     this.subscribers.push(callback);
-    return () => {
-      this.subscribers = this.subscribers.filter(sub => sub !== callback);
-    };
+    return () => { this.subscribers = this.subscribers.filter(sub => sub !== callback); };
   }
 
-  // Enable real-time updates
   enableRealtime(): void {
     this.realtimeEnabled = true;
     console.log('Real-time notifications enabled');
-    
-    // Simulate real-time updates every 30 seconds
     if (this.realtimeEnabled) {
-      setInterval(() => {
-        this.simulateRealtimeUpdate();
-      }, 30000);
+      setInterval(() => { this.simulateRealtimeUpdate(); }, 30000);
+    }
+    // Poll API if available
+    if (apiClient.hasApi) {
+      setInterval(() => { this.syncFromApi().catch(()=>{}); }, 15000);
     }
   }
 
-  // Disable real-time updates
   disableRealtime(): void {
     this.realtimeEnabled = false;
     console.log('Real-time notifications disabled');
   }
 
-  // Simulate real-time notification updates
   private simulateRealtimeUpdate(): void {
     if (!this.realtimeEnabled) return;
-    
     const notificationTypes: Notification['type'][] = ['content', 'qa', 'community', 'system'];
     const randomType = notificationTypes[Math.floor(Math.random() * notificationTypes.length)];
-    
     const newNotification: Notification = {
       id: Date.now().toString(),
       type: randomType,
@@ -61,7 +72,6 @@ class NotificationService {
       isRead: false,
       actionUrl: this.getRandomActionUrl(randomType)
     };
-    
     this.notifications = [newNotification, ...this.notifications];
     this.notifySubscribers();
   }
@@ -78,26 +88,10 @@ class NotificationService {
 
   private getRandomMessage(type: string): string {
     const messages: Record<string, string[]> = {
-      content: [
-        'A new teaching has been uploaded to the library.',
-        'Check out the latest content from your favorite speaker.',
-        'Exclusive premium content is now available.'
-      ],
-      qa: [
-        'Live Q&A with Pastor Chris starts in 30 minutes.',
-        'Don\'t miss the upcoming Q&A session on faith topics.',
-        'A new Q&A session has been scheduled for this week.'
-      ],
-      community: [
-        'Someone replied to your comment in the community.',
-        'You have new activity in your favorite group.',
-        'Check out the latest posts from your friends.'
-      ],
-      system: [
-        'The app has been updated with new features.',
-        'Scheduled maintenance will occur tonight.',
-        'Your feedback has helped improve the app!'
-      ]
+      content: ['A new teaching has been uploaded to the library.', 'Check out the latest content from your favorite speaker.', 'Exclusive premium content is now available.'],
+      qa: ['Live Q&A with Pastor Chris starts in 30 minutes.', 'Don\'t miss the upcoming Q&A session on faith topics.', 'A new Q&A session has been scheduled for this week.'],
+      community: ['Someone replied to your comment in the community.', 'You have new activity in your favorite group.', 'Check out the latest posts from your friends.'],
+      system: ['The app has been updated with new features.', 'Scheduled maintenance will occur tonight.', 'Your feedback has helped improve the app!']
     };
     return messages[type][Math.floor(Math.random() * messages[type].length)];
   }
@@ -112,56 +106,45 @@ class NotificationService {
     return urls[type][Math.floor(Math.random() * urls[type].length)];
   }
 
-  // Get all notifications
-  getNotifications(): Notification[] {
-    return this.notifications;
-  }
+  getNotifications(): Notification[] { return this.notifications; }
 
-  // Mark notification as read
   markAsRead(id: string): void {
-    this.notifications = this.notifications.map(n => 
-      n.id === id ? { ...n, isRead: true } : n
-    );
+    this.notifications = this.notifications.map(n => n.id === id ? { ...n, isRead: true } : n);
     this.notifySubscribers();
+    if (apiClient.hasApi) apiClient.put(`/notifications/${id}/read`).catch(()=>{});
   }
 
-  // Mark notification as unread
   markAsUnread(id: string): void {
-    this.notifications = this.notifications.map(n => 
-      n.id === id ? { ...n, isRead: false } : n
-    );
+    this.notifications = this.notifications.map(n => n.id === id ? { ...n, isRead: false } : n);
     this.notifySubscribers();
   }
 
-  // Delete notification
   deleteNotification(id: string): void {
     this.notifications = this.notifications.filter(n => n.id !== id);
     this.notifySubscribers();
+    if (apiClient.hasApi) apiClient.delete(`/notifications/${id}`).catch(()=>{});
   }
 
-  // Mark all as read
   markAllAsRead(): void {
     this.notifications = this.notifications.map(n => ({ ...n, isRead: true }));
     this.notifySubscribers();
+    if (apiClient.hasApi) apiClient.put('/notifications/read-all').catch(()=>{});
   }
 
-  // Clear all notifications
   clearAll(): void {
     this.notifications = [];
     this.notifySubscribers();
+    if (apiClient.hasApi) apiClient.delete('/notifications').catch(()=>{});
   }
 
-  // Notify all subscribers
   notifySubscribers(): void {
     this.subscribers.forEach(callback => callback(this.notifications));
   }
 
-  // Get unread count
   getUnreadCount(): number {
     return this.notifications.filter(n => !n.isRead).length;
   }
 
-  // Get notifications by type
   getNotificationsByType(type: string): Notification[] {
     return this.notifications.filter(n => n.type === type);
   }

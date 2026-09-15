@@ -1,4 +1,5 @@
 import { SubscriptionPlan } from '@/lib/mock-data';
+import { apiClient } from '@/lib/api-client';
 
 export interface PaymentMethod {
   id: string;
@@ -38,19 +39,10 @@ export interface PaymentIntent {
   created: number;
 }
 
-// Mock payment methods
 const mockPaymentMethods: PaymentMethod[] = [
-  {
-    id: 'pm_123',
-    type: 'card',
-    last4: '4242',
-    brand: 'Visa',
-    isDefault: true,
-    expiry: '12/28',
-  },
+  { id: 'pm_123', type: 'card', last4: '4242', brand: 'Visa', isDefault: true, expiry: '12/28' },
 ];
 
-// Mock subscription
 const mockSubscription: Subscription = {
   id: 'sub_123',
   planId: 'premium-monthly',
@@ -61,7 +53,6 @@ const mockSubscription: Subscription = {
   autoRenew: true,
 };
 
-// Mock billing info
 const mockBillingInfo: BillingInfo = {
   name: 'David Emmanuel',
   email: 'david.emmanuel@example.com',
@@ -73,78 +64,85 @@ const mockBillingInfo: BillingInfo = {
 };
 
 export const PaymentService = {
-  // Get all payment methods for current user
   async getPaymentMethods(): Promise<PaymentMethod[]> {
-    // In a real app, this would be an API call
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockPaymentMethods), 500);
-    });
+    return new Promise((resolve) => { setTimeout(() => resolve(mockPaymentMethods), 300); });
   },
 
-  // Add a new payment method
   async addPaymentMethod(paymentMethod: Omit<PaymentMethod, 'id'>): Promise<PaymentMethod> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const newMethod = {
-          ...paymentMethod,
-          id: `pm_${Date.now()}`,
-        };
+        const newMethod = { ...paymentMethod, id: `pm_${Date.now()}` };
         mockPaymentMethods.push(newMethod);
         resolve(newMethod);
-      }, 500);
+      }, 300);
     });
   },
 
-  // Get current subscription
   async getCurrentSubscription(): Promise<Subscription | null> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockSubscription), 500);
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.get<{ subscription: any }>('/subscriptions/me');
+      if (!data.subscription) return null;
+      const s = data.subscription;
+      return {
+        id: s.id,
+        planId: s.planId || s.plan_id,
+        status: s.status,
+        currentPeriodEnd: s.currentPeriodEnd || s.current_period_end,
+        createdAt: s.currentPeriodStart || new Date().toISOString(),
+        paymentMethodId: 'pm_123',
+        autoRenew: s.status === 'active',
+      };
+    }, async () => {
+      return new Promise((resolve) => { setTimeout(() => resolve(mockSubscription), 300); });
     });
   },
 
-  // Create a new subscription
   async createSubscription(planId: string, paymentMethodId: string): Promise<Subscription> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const newSubscription: Subscription = {
-          id: `sub_${Date.now()}`,
-          planId,
-          status: 'active',
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          createdAt: new Date().toISOString(),
-          paymentMethodId,
-          autoRenew: true,
-        };
-        resolve(newSubscription);
-      }, 500);
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.post<any>('/subscriptions', { planId, paymentMethodId });
+      return {
+        id: data.id,
+        planId: data.planId || planId,
+        status: 'active' as const,
+        currentPeriodEnd: new Date(Date.now() + 30*24*60*60*1000).toISOString(),
+        createdAt: new Date().toISOString(),
+        paymentMethodId,
+        autoRenew: true,
+      };
+    }, async () => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const newSubscription: Subscription = {
+            id: `sub_${Date.now()}`,
+            planId,
+            status: 'active',
+            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            createdAt: new Date().toISOString(),
+            paymentMethodId,
+            autoRenew: true,
+          };
+          resolve(newSubscription);
+        }, 500);
+      });
     });
   },
 
-  // Update subscription plan
   async updateSubscription(subscriptionId: string, newPlanId: string): Promise<Subscription> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          ...mockSubscription,
-          planId: newPlanId,
-        });
-      }, 500);
-    });
+    // For happy path, create new subscription
+    return this.createSubscription(newPlanId, 'pm_123');
   },
 
-  // Cancel subscription
   async cancelSubscription(subscriptionId: string): Promise<Subscription> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          ...mockSubscription,
-          status: 'cancelled',
-        });
-      }, 500);
+    return apiClient.tryApi(async () => {
+      await apiClient.post('/subscriptions/cancel', {});
+      return { ...mockSubscription, status: 'cancelled' as const };
+    }, async () => {
+      return new Promise((resolve) => {
+        setTimeout(() => { resolve({ ...mockSubscription, status: 'cancelled' }); }, 300);
+      });
     });
   },
 
-  // Create payment intent for secure payment processing
   async createPaymentIntent(amount: number, currency: string = 'USD'): Promise<PaymentIntent> {
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -156,100 +154,69 @@ export const PaymentService = {
           clientSecret: `pi_${Date.now()}_secret_${Math.random().toString(36).substring(2, 10)}`,
           created: Date.now(),
         });
-      }, 500);
+      }, 300);
     });
   },
 
-  // Confirm payment with payment method
   async confirmPayment(paymentIntentId: string, paymentMethodId: string): Promise<PaymentIntent> {
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve({
           id: paymentIntentId,
-          amount: 999, // $9.99 in cents
+          amount: 999,
           currency: 'USD',
           status: 'succeeded',
           clientSecret: `pi_${paymentIntentId}_secret_confirmed`,
           created: Date.now(),
         });
-      }, 1000);
+      }, 600);
     });
   },
 
-  // Get billing information
   async getBillingInfo(): Promise<BillingInfo> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockBillingInfo), 500);
-    });
+    return new Promise((resolve) => { setTimeout(() => resolve(mockBillingInfo), 300); });
   },
 
-  // Update billing information
   async updateBillingInfo(billingInfo: BillingInfo): Promise<BillingInfo> {
     return new Promise((resolve) => {
       setTimeout(() => {
         Object.assign(mockBillingInfo, billingInfo);
         resolve(mockBillingInfo);
-      }, 500);
+      }, 300);
     });
   },
 
-  // Validate payment method (mock validation)
   async validatePaymentMethod(cardNumber: string, expiry: string, cvc: string): Promise<boolean> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        // Simple validation for demo purposes
-        const isValid = cardNumber.length === 16 && expiry.length === 5 && cvc.length === 3;
+        const isValid = cardNumber.length >= 13 && expiry.length === 5 && cvc.length >= 3;
         resolve(isValid);
-      }, 500);
+      }, 300);
     });
   },
 
-  // Get available subscription plans
   async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve([
-          {
-            id: 'basic-monthly',
-            name: 'Basic',
-            price: 4.99,
-            interval: 'monthly',
-            features: [
-              'Access to all public content',
-              'Daily confessions & ROR',
-              'Community access',
-              'Standard quality streaming',
-            ],
-          },
-          {
-            id: 'premium-monthly',
-            name: 'Premium',
-            price: 9.99,
-            interval: 'monthly',
-            features: [
-              'Everything in Basic',
-              'Exclusive premium content',
-              'HD quality streaming',
-              'Offline downloads',
-              'Ad-free experience',
-              'Early access to new content',
-            ],
-            isPopular: true,
-          },
-          {
-            id: 'premium-annually',
-            name: 'Premium Annual',
-            price: 99.99,
-            interval: 'annually',
-            features: [
-              'Everything in Premium Monthly',
-              'Save 17% with annual billing',
-              'Priority support',
-              'Exclusive annual member events',
-            ],
-          },
-        ]);
-      }, 500);
+    return apiClient.tryApi(async () => {
+      const data = await apiClient.get<{ items: any[] }>('/subscriptions/plans');
+      return data.items.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        interval: p.interval,
+        features: p.features || [],
+        isPopular: !!p.isPopular || !!p.is_popular,
+        isCurrent: false,
+      }));
+    }, async () => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve([
+            { id: 'basic-monthly', name: 'Basic', price: 4.99, interval: 'monthly', features: ['Access to all public content', 'Daily confessions & ROR', 'Community access', 'Standard quality streaming'] },
+            { id: 'premium-monthly', name: 'Premium', price: 9.99, interval: 'monthly', features: ['Everything in Basic', 'Exclusive premium content', 'HD quality streaming', 'Offline downloads', 'Ad-free experience', 'Early access to new content'], isPopular: true },
+            { id: 'premium-annually', name: 'Premium Annual', price: 99.99, interval: 'annually', features: ['Everything in Premium Monthly', 'Save 17% with annual billing', 'Priority support', 'Exclusive annual member events'] },
+          ]);
+        }, 300);
+      });
     });
   },
 };

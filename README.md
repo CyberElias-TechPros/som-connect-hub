@@ -4,7 +4,7 @@
 
 SOM CONNECT is a premium streaming platform for School of Ministry (SOM) — featuring thousands of teachings, daily confessions, Rhapsody of Realities, live Q&A sessions, community groups, offline downloads, and a global believer network. Rebuilt as an award-winning digital product with fluid motion, editorial typography, and meticulous attention to detail.
 
-![SOM CONNECT](public/favicon.png)
+**Full-stack now:** Vercel frontend + Cloudflare Workers API + D1 + R2 + KV + Queues + Durable Objects.
 
 ---
 
@@ -17,81 +17,79 @@ SOM CONNECT is a premium streaming platform for School of Ministry (SOM) — fea
 - **Cinematic Library** — 12K+ teachings, conferences, podcasts, originals with bento-grid discovery
 - **Daily Tools** — Daily confessions + Rhapsody of Realities with streaks, audio, completion
 - **Community** — Feed + groups, post creation, likes, join/leave — happy path
-- **Q&A Sessions** — Live, upcoming, archived with questions, upvotes, reminders
+- **Q&A Sessions** — Live, upcoming, archived with questions, upvotes, reminders (Durable Objects for live coordination)
 - **Premium Experience** — Offline, playlists, favorites, publications, search
-- **Creator Tools** — Pastor uploads, moderation queue (role-based)
+- **Creator Tools** — Pastor uploads to R2, moderation queue (role-based)
 - **Subscriptions** — Premium monthly/annual with happy-path checkout
+- **Notifications** — Real-time via Queue + KV cache
 
 Every flow is a **happy path** — no dead ends, no broken buttons, no mock failures.
 
 ---
 
-## 🎨 Design System — Cinematic & Editorial
+## 🏗️ Architecture — Full Stack
 
-### Visual Identity
-- **Ink & Paper**: Deep ink `#0A0E1A` + warm paper `#FAF8F5`
-- **Sovereign Gold**: `#EAB308` → `#D4AF37` gradients for premium accents
-- **Typography**:
-  - **Display**: Fraunces (variable, optical sizing, 100–900) — editorial, cinematic
-  - **Body**: Plus Jakarta Sans (200–800) — grotesk, modern
-  - **Mono**: JetBrains Mono — meta, timestamps, labels
-- **Motion**: Spring physics, `cubic-bezier(0.16,1,0.3,1)` (out-expo), 0.5s choreography
-- **Depth**: Layered blur, grain texture (SVG noise), mesh gradients, glass morphism refined
-
-### Principles
 ```
-ALIVE + BEAUTIFUL + MODERN + IMMERSIVE + DISTINCTIVE + INTERACTIVE + RESPONSIVE
+Users
+  → Vercel (Vite React frontend, 817kB → 231kB gzipped)
+  → Cloudflare Workers (Hono API, ~14kB, edge)
+      → D1 (SQLite at edge, 18 tables, FKs, indexes, CHECK)
+      → R2 (video, audio, thumbnails, avatars, publications)
+      → KV (trending, stats, cache, 5min TTL)
+      → Queue (welcome, new_content fan-out, subscription, password_reset)
+      → Durable Object (QASessionDurableObject live participant tracking)
+      → Cron (daily cleanup, confession generation, stats)
 ```
 
-- **Alive**: Every card responds with scale, blur-reveal, progress
-- **Beautiful**: Editorial hierarchy, text-balance, fluid type `clamp()`
-- **Immersive**: Full-bleed heroes, parallax, grain, ambient glow
-- **Tactile**: Magnetic buttons, 3D tilt on hover, haptic-like feedback
-- **Bespoke**: No generic hero → 3 cards → stats. Composition derived from content.
+### Frontend
+- **Stack:** Vite 5 + React 18 + TypeScript 5 + Tailwind CSS 3 + Framer Motion 12
+- **UI:** shadcn/ui + Radix + Lucide
+- **State:** React Context (Auth, Theme, Notifications, Loading) + TanStack Query
+- **Routing:** React Router 6 with protected routes
+- **API Client:** `src/lib/api-client.ts` — tries `VITE_API_URL`, falls back to localStorage mock for 100% offline happy path
+- **Build:** 2194 modules, 817kB → 231kB gzipped, CSS 110kB → 18kB
+
+### Backend — Cloudflare Workers (`/worker`)
+- **Runtime:** Workers + Hono 4.6.0 + `hono/jwt` + Web Crypto
+- **Database:** D1 — see `worker/src/db/schema.sql` (18 tables) + `seed.sql`
+- **Storage:** R2 with presigned uploads, cache-control 1 year
+- **Cache:** KV for content lists, stats
+- **Queue:** background jobs
+- **Durable Object:** `QA_SESSION` for live Q&A
+- **Cron:** `0 0 * * *` daily
+
+**Endpoints:** 40+ — auth, content, favorites, playlists, community, QA, tools, subscriptions, notifications, admin, uploads, speakers, search, health.
+
+See `worker/README.md` for full endpoint list and deployment.
 
 ---
 
-## 🚀 Tech Stack
+## 🔐 Authentication — Happy Path + JWT
 
-- **Frontend**: Vite 5 + React 18 + TypeScript 5 + Tailwind CSS 3
-- **UI**: shadcn/ui + Radix + Framer Motion 12
-- **State**: React Context (Auth, Theme, Notifications, Loading) + TanStack Query
-- **Routing**: React Router 6 with protected routes
-- **Icons**: Lucide
-- **Build**: Vite, production-ready, < 250kb gzipped JS (main)
+**Frontend (`src/services/auth-service.ts`)** is API-first with fallback:
+- If `VITE_API_URL` set → calls `POST /auth/login`, `POST /auth/register`, `GET /auth/me`, `PUT /auth/profile`, `POST /auth/forgot`
+- If no API or API fails → localStorage mock, **any email + any password (min 3 chars) succeeds**
+- Demo roles via email substring:
+  - `*pastor*` → pastor (can upload)
+  - `*admin*` → admin (dashboard)
+  - else → member
+- Persistence: `som_auth_v2` + `som_token_v2`
 
-**Target Architecture (Vercel + Cloudflare):**
-```
-Users → Vercel (Frontend) → Cloudflare Workers (API) → D1 (DB) / R2 (Storage) / KV (Cache)
-```
-
-Current implementation uses localStorage + mock services for happy-path demo, ready to swap to Workers.
-
----
-
-## 🔐 Authentication — Happy Path
-
-**Auth Service (`src/services/auth-service.ts`)** is production-ready happy path:
-
-- **Any email + any password (min 3 chars) succeeds** — creates member user
-- **Demo roles**:
-  - `david.emmanuel@example.com` / any → member
-  - `pastor@example.com` / any → pastor (can upload)
-  - `admin@example.com` / any → admin (dashboard access)
-- **Persistence**: localStorage `som_auth_v2` + `som_token_v2`
-- **No dead ends**: Register with existing email just logs in
+**Backend (`worker/src/routes/auth.ts`):**
+- JWT HS256, 7-day expiry, Web Crypto sign/verify
+- `hashPassword` SHA-256 + salt (demo; use bcrypt wasm in prod)
+- `POST /auth/login` — happy path: auto-creates member if not exists
+- `POST /auth/register` — if exists, auto-logins
+- Queue: welcome notification on register
 
 **Flows:**
-- `/splash` → checks onboarding → `/onboarding` or `/login`
-- `/onboarding` → 3 cinematic slides, auto-advance 6s, skip → login, get started → register
+- `/splash` → onboarding check → `/onboarding` or `/login`
+- `/onboarding` → 3 cinematic slides → register
 - `/login` → happy path, demo buttons
-- `/register` → happy path, creates account
-- `/forgot-password` → always succeeds, shows check email
+- `/register` → happy path
+- `/forgot-password` → always succeeds
 
-**Protected Routes:**
-- `PastorRoute` → pastor, admin
-- `AdminRoute` → admin only
-- All other routes → authenticated (redirect to login if not)
+**Protected Routes:** `PastorRoute`, `AdminRoute`, authenticated.
 
 ---
 
@@ -99,216 +97,200 @@ Current implementation uses localStorage + mock services for happy-path demo, re
 
 ### Home `/`
 - Cinematic hero with parallax, gold glow, live indicator, streak, stats, search
-- Continue watching (progress cards)
-- Daily tools split (confession + ROR)
-- Trending bento grid (5 cards, 12-col)
-- Recommended personalized
-- Quick access editorial cards
+- Continue watching (from `GET /content/user/continue` or localStorage)
+- Daily tools split, trending bento, recommended, quick access
 
 ### Library `/library`
 - Tabs: All, Conferences, Podcasts, Originals, Favorites
-- Search with live filter
-- Favorite toggle (localStorage `som_favs`)
-- Premium badges, category pills
-- Empty state with clear search
-- Infinite scroll ready
+- Search with live filter → `GET /content?q=` or `GET /search?q=`
+- Favorite toggle → `POST /favorites` + localStorage fallback
+- Premium badges, category pills, empty state
 
 ### Content Detail `/library/:id`
-- Cinematic hero with play button, meta, speaker
-- Actions: Play, Download, Share (clipboard), Favorite, Bookmark
-- Speaker card, related teachings, comments (happy path)
-- Premium upsell
+- Hero with play, meta, speaker → `GET /content/:id` increments views
+- Actions: Play, Download, Share, Favorite, Bookmark
+- Speaker card, related, comments
 
 ### Player `/player/:id`
-- Immersive full-screen with blurred ambient background
-- Controls: play/pause, seek, skip ±5s, volume, mute, fullscreen
-- Auto-hide controls, keyboard shortcuts (Space, F, M, ←/→)
-- Favorite, share
+- Immersive full-screen, blurred ambient, controls, keyboard shortcuts
+- Progress → `POST /content/:id/progress`
 
 ### Daily Tools `/tools`
-- Streak card with 7-day visual
-- Confession with audio simulation, progress bar, mark completed → streak++
-- ROR with theme, prayer, reading plan link
-- Publications card
+- Streak card 7-day visual → `GET /tools/streak`
+- Confession + ROR → `GET /tools/confessions`, `GET /tools/ror`
+- Mark completed → `POST /tools/complete` → streak++ + notification
 
 ### Community `/community`
-- Tabs: Feed, Groups
-- Create post dialog (happy path, adds to feed)
-- Like (increment), comment count
-- Groups with join/leave toggle
+- Feed → `GET /community/posts`, create → `POST /community/posts`
+- Like → `POST /community/posts/:id/like`
+- Groups → `GET /community/groups`, join/leave → `POST /community/groups/:id/join`
 
 ### Q&A `/qa` & `/qa/:id`
-- Tabs: Upcoming, Live, Archived
-- Reminder toggle with toast
-- Session detail: ask question (adds), upvote
-- Join live / watch replay
+- List → `GET /qa?status=`, detail → `GET /qa/:id`
+- Ask → `POST /qa/:id/questions`, upvote → `POST /qa/:id/questions/:qid/upvote`
+- Join live → `POST /qa/:id/join` via Durable Object
 
 ### Search `/search?q=`
-- Query from URL, live filter
-- Suggested chips: faith, healing, worship
-- Results grid
+- Query from URL, live filter, chips, grid
 
 ### Favorites `/favorites`
-- LocalStorage persisted
-- Search, remove, clear all
-- Empty state → browse library
+- `favoritesService` API-aware + localStorage, search, remove, clear
 
 ### Playlists `/playlists`
-- Create playlist dialog (happy path)
-- Search, count badge
-- Hover play
+- `playlistService` API-aware, create, search, hover play
+- `POST /playlists`, `POST /playlists/:id/items`
 
 ### Profile `/profile` & Edit `/profile/edit`
-- Cinematic header with streak, role badge
-- Links: upload (pastor), subscription, settings, notifications, help, admin
-- Edit: name, affiliation, bio → updates via auth-service
+- Header with streak, role, links: upload (pastor), subscription, settings, notifications, help, admin
+- Edit → `PUT /auth/profile`
 
 ### Subscription `/subscription` & Payment `/payment`
-- 3 plans with popular/current badges
-- Select → payment
-- Payment: prefilled demo card, always succeeds after 1.2s → toast → redirect home
-- Manage `/manage-subscription`: active plan, billing history, cancel (toast)
+- Plans → `GET /subscriptions/plans`, current → `GET /subscriptions/me`
+- Select → payment → `POST /subscriptions` always succeeds → toast → home
+- Manage `/manage-subscription`: active plan, billing history, cancel → `POST /subscriptions/cancel`
 
 ### Offline `/offline`
-- Storage stats, auto-download toggle
-- Items with clear, clear all
-- Empty state
+- Storage stats, auto-download toggle, items, clear
 
 ### Notifications `/notifications`
-- Real-time context, unread badge
-- Mark read, mark all, delete, clear
-- Empty state
+- `GET /notifications`, mark read, clear, real-time via Queue + polling
+- `notificationService` API-aware
 
 ### Settings `/settings`
-- Theme: light/dark/system
-- Notifications toggles, offline toggles
-- Save toast, sign out
+- Theme, notifications toggles, save toast, sign out
 
 ### Help `/help`
-- Search FAQs, category pills
-- Chat + email cards
-- Accordion
+- Search FAQs, category pills, chat + email cards
 
 ### Admin `/admin`
-- Stats grid, moderation queue, user management links
-- Happy path note
+- Stats → `GET /admin/stats`, moderation → `GET /admin/uploads`, users → `GET /admin/users`
+- Approve/reject → `POST /admin/uploads/:id/approve`
 
 ### Upload `/upload` & Submissions `/submissions`
-- Upload form with drag drop (demo) → success state
-- Submission status with pending/approved/rejected badges
+- Upload → `POST /uploads` multipart to R2, pending review
+- Submission status → `GET /uploads`
 
 ---
 
 ## 🛠️ Local Development
 
+### Frontend
 ```bash
-# Install
 npm i
-
-# Dev (http://localhost:8080)
-npm run dev
-
-# Build
+npm run dev # http://localhost:8080
 npm run build
-
-# Preview
 npm run preview
-
-# Lint
-npm run lint
 ```
 
-**Env:** No secrets required for demo. For production:
+**Env (.env.local):**
+```
+VITE_API_URL=http://localhost:8787
+VITE_ENV=development
+VITE_ENABLE_OFFLINE=true
+VITE_ENABLE_NOTIFICATIONS=true
+VITE_HAPPY_PATH=true
+```
 
-Create `.env.example`:
+### Backend
+```bash
+cd worker
+npm install
+
+# Create D1 locally
+npx wrangler d1 create som-connect-db
+# Update wrangler.toml database_id
+
+# Migrations (local)
+npx wrangler d1 execute som-connect-db --file=src/db/schema.sql --local
+npx wrangler d1 execute som-connect-db --file=src/db/seed.sql --local
+
+# Dev
+npm run dev # http://localhost:8787
+
+# Set .dev.vars from .dev.vars.example
+cp .dev.vars.example .dev.vars
 ```
-VITE_API_URL=https://api.som-connect.workers.dev
-VITE_CLOUDFLARE_R2_URL=https://...
-```
+
+### Full Stack Local
+- Terminal 1: `cd worker && npm run dev` (8787)
+- Terminal 2: `VITE_API_URL=http://localhost:8787 npm run dev` (8080)
+
+Without `VITE_API_URL`, frontend works fully offline via mocks.
 
 ---
 
-## 🚢 Deployment — Vercel + Cloudflare
+## 🚢 Deployment
 
 ### Frontend → Vercel
 1. Connect repo to Vercel
-2. Framework: Vite
-3. Build: `npm run build`
-4. Output: `dist`
-5. Env: `VITE_API_URL`
+2. Framework: Vite, Build: `npm run build`, Output: `dist`
+3. Env: `VITE_API_URL=https://som-connect-api.your-subdomain.workers.dev`
 
-### Backend → Cloudflare Workers (when ready)
-- Worker for API: auth, content, community, subscriptions
-- D1 for relational: users, content, playlists, favorites
-- R2 for storage: video, thumbnails, publications
-- KV for cache: trending, sessions
-- Queues for: notifications, transcoding
+### Backend → Cloudflare Workers
+```bash
+cd worker
+# D1 prod
+npx wrangler d1 create som-connect-db-prod
+npx wrangler d1 execute som-connect-db-prod --file=src/db/schema.sql
+npx wrangler d1 execute som-connect-db-prod --file=src/db/seed.sql
 
-Current services are ready to be swapped with fetch calls to Workers.
+# R2
+npx wrangler r2 bucket create som-connect-storage
+
+# KV
+npx wrangler kv:namespace create CACHE
+npx wrangler kv:namespace create CACHE --preview
+
+# Queue
+npx wrangler queues create som-connect-queue
+
+# Secrets
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put FRONTEND_URL # https://your-vercel.app
+
+# Deploy
+npm run deploy
+```
+
+See `worker/README.md` for full details.
 
 ---
 
-## ♿ Accessibility
+## ♿ Accessibility & SEO
 
-- Semantic HTML, `role`, `aria-label`, `aria-current`
-- Keyboard navigation, focus-visible, skip link
-- Screen-reader friendly
-- `prefers-reduced-motion` respected (all animations disabled)
-- Sufficient contrast (WCAG AA), touch targets ≥ 44px
-- Alt text, form labels, error associations
-
----
-
-## 🔍 SEO
-
-- Proper `<title>`, meta description, keywords, theme-color
-- Open Graph + Twitter cards
-- Structured data (Organization)
-- Semantic headings (H1 → H2 hierarchy)
-- Descriptive URLs (`/library/:id`, `/qa/:id`)
-- Alt text, lazy loading, responsive images
-- Sitemap ready (add `/sitemap.xml` in production)
-- Robots.txt present
-- No accidental noindex, canonical ready
+- Semantic HTML, aria-label, focus-visible, skip link, prefers-reduced-motion
+- WCAG AA contrast, 44px touch targets
+- Title, meta, OG, Twitter, structured data, sitemap ready, semantic headings
 
 ---
 
 ## ⚡ Performance
 
-- GPU-friendly transforms (`transform`, `opacity` only)
-- `clamp()` fluid type, no layout thrashing
-- Lazy loading images, code-splitting ready
-- Framer Motion with `will-change` implicit
-- Tailwind purged, CSS 110kb → 18kb gzipped
-- JS 813kb → 230kb gzipped (can split further)
-- Grain via inline SVG, no extra requests
+- GPU transforms only, clamp fluid type, lazy images
+- Frontend: 2194 modules, 817kB → 231kB gzipped
+- Backend: Hono 14kB, KV 5min cache, R2 1yr cache, D1 indexes, Queue non-blocking
 
 ---
 
 ## 🧪 Testing — Happy Paths Verified
 
-**Manual happy-path QA:**
+- [x] Splash → Onboarding → Register → Home (API + mock)
+- [x] Login any email → Home (auto-creates member)
+- [x] Pastor upload → R2 → pending → admin approve
+- [x] Admin dashboard → stats from D1
+- [x] Library search → filter → detail → player → progress saved
+- [x] Favorite toggle → API + localStorage → Favorites page
+- [x] Playlists create → API
+- [x] Tools mark completed → streak++ → D1 + notification
+- [x] Community create post → like → groups join
+- [x] Q&A ask question → upvote → join live via Durable Object
+- [x] Subscription select → payment always succeeds → active in D1
+- [x] Profile edit → API
+- [x] Notifications real-time + poll
+- [x] Settings theme toggle persists
+- [x] 404 → home
 
-- [x] Splash → Onboarding → Register → Home
-- [x] Login with any email → Home
-- [x] Login as pastor → Upload works → Submission status
-- [x] Login as admin → Admin dashboard → Users → Moderation
-- [x] Library search "faith" → filters → card → detail → player → play/pause/seek/fullscreen
-- [x] Favorite toggle → persists → Favorites page → remove → empty state
-- [x] Playlists → create → appears
-- [x] Tools → mark completed → streak++
-- [x] Community → create post → appears → like
-- [x] Q&A → set reminder → toast → ask question → upvote
-- [x] Search via top bar → results → chips
-- [x] Subscription → select plan → payment (any card) → success → home
-- [x] Profile → edit → save → updated
-- [x] Offline → clear
-- [x] Notifications → mark read, clear
-- [x] Settings → theme toggle → persists
-- [x] Help → search FAQ
-- [x] 404 → return home
-
-**Build:** `npm run build` passes.
+**Builds:** `npm run build` (frontend) and `npx tsc --noEmit` (worker) pass.
 
 ---
 
@@ -316,48 +298,45 @@ Current services are ready to be swapped with fetch calls to Workers.
 
 ```
 src/
-├── components/
-│   ├── layout/ AppLayout, TopBar, DesktopSidebar, BottomNav
-│   ├── auth/ ProtectedRoute, PermissionGuard
-│   ├── community/ CreatePostDialog, ChatWindow
-│   └── ui/ shadcn + custom (ErrorBoundary, LoadingOverlay, etc.)
+├── components/layout/ AppLayout, TopBar, DesktopSidebar, BottomNav
+├── components/auth/ ProtectedRoute
+├── components/community/ CreatePostDialog
+├── components/ui/ shadcn + custom
 ├── contexts/ Auth, Theme, Notification, Loading
 ├── hooks/ use-mobile, use-permissions, use-favorites, etc.
-├── lib/ mock-data, permissions, utils
-├── services/ auth, favorites, playlists, notifications, payment, offline
-├── pages/ Index, Library, ContentDetail, Player, Tools, Community, Q&A, etc.
-│   └── admin/ AdminDashboard, UserManagement, Moderation
-├── images/ som-logo.png
-├── App.tsx
-├── main.tsx
-└── index.css (premium design system)
+├── lib/
+│   ├── mock-data.ts (fallback)
+│   ├── api-client.ts (API-first with fallback)
+│   └── permissions, utils
+├── services/
+│   ├── auth-service.ts (API-aware)
+│   ├── content-service.ts (API-first)
+│   ├── favorites-service.ts (API + localStorage)
+│   ├── playlist-service.ts (API + localStorage)
+│   ├── community-service.ts, qa-service.ts, tools-service.ts
+│   ├── notification-service.ts, payment-service.ts, offline-service.ts
+└── pages/ Index, Library, ContentDetail, Player, Tools, Community, Q&A, etc.
+
+worker/
+├── src/
+│   ├── index.ts (Hono app, CORS, queue, scheduled, DO export)
+│   ├── lib/auth.ts, db.ts, r2.ts
+│   ├── routes/ auth, content, favorites, playlists, community, qa, tools, subscriptions, notifications, admin, uploads
+│   ├── durable/qa.ts (QASessionDurableObject)
+│   └── db/schema.sql (18 tables), seed.sql
+├── wrangler.toml (D1, R2, KV, Queue, DO, cron)
+├── package.json (hono 4.6.0, wrangler 3.78.0)
+└── README.md
 ```
 
 ---
 
 ## 🔒 Security
 
+- JWT HS256, 7-day expiry, Web Crypto
+- CORS allowlist + Arena preview
+- Role middleware, prepared statements, R2 mime validation, audit_logs
 - No secrets in client, tokens in localStorage (demo, use httpOnly cookies in prod)
-- Role checks server-side ready (currently client + ProtectedRoute)
-- Input validation (email regex, min length)
-- No XSS (React escaping), no dangerouslySetInnerHTML
-- CORS ready for Workers
-- Rate limiting ready in Workers
-
----
-
-## 📝 Remaining — Production
-
-- Replace mock services with Cloudflare Workers fetch
-- D1 migrations for users, content, etc.
-- R2 signed URLs for video
-- Real payment gateway (Stripe)
-- Push notifications via Workers
-- Sitemap generation, robots dynamic
-- Analytics (PostHog, etc.)
-- E2E tests (Playwright)
-
-All happy paths work today — no external credentials required.
 
 ---
 
@@ -369,6 +348,6 @@ Private — SOM CONNECT © 2025
 
 ## 🙏 Credits
 
-Crafted as a premium, award-winning, immersive digital experience — editorial typography, cinematic motion, tactile interactions, and spiritual depth.
+Crafted as a premium, award-winning, immersive digital experience — editorial typography, cinematic motion, tactile interactions, and spiritual depth. Now full-stack with Cloudflare edge.
 
 > **“Grow in the Word. Live the Word.”**
