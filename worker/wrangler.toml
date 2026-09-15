@@ -3,30 +3,35 @@ main = "src/index.ts"
 compatibility_date = "2024-11-27"
 compatibility_flags = ["nodejs_compat"]
 
-# Development
+# ============ VARS (non-secret) ============
 [vars]
 ENV = "development"
-JWT_SECRET = "som-connect-dev-secret-change-in-prod"
 FRONTEND_URL = "http://localhost:8080"
+# JWT_SECRET should be set via `wrangler secret put JWT_SECRET` in prod
+JWT_SECRET = "som-connect-dev-secret-change-in-prod-must-be-32+chars"
 
-# D1 Database
+# ============ D1 DATABASE ============
 [[d1_databases]]
 binding = "DB"
 database_name = "som-connect-db"
 database_id = "local-som-connect-db"
+# For production, replace with real id from `wrangler d1 create som-connect-db-prod`
+# database_id = "your-prod-d1-id"
 
-# R2 Bucket for storage (videos, thumbnails, avatars, publications)
+# ============ R2 BUCKET ============
 [[r2_buckets]]
 binding = "STORAGE"
 bucket_name = "som-connect-storage"
+# Production: same name, created via `wrangler r2 bucket create som-connect-storage`
 
-# KV Namespace for cache and config
+# ============ KV NAMESPACE ============
 [[kv_namespaces]]
 binding = "CACHE"
 id = "local-cache-id"
 preview_id = "local-cache-preview-id"
+# Production: replace with real ids from `wrangler kv:namespace create CACHE`
 
-# Queue for background jobs (notifications, transcoding, emails)
+# ============ QUEUE ============
 [[queues.producers]]
 binding = "QUEUE"
 queue = "som-connect-queue"
@@ -35,8 +40,15 @@ queue = "som-connect-queue"
 queue = "som-connect-queue"
 max_batch_size = 10
 max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "som-connect-queue-dlq"
 
-# Durable Object for live Q&A coordination
+# DLQ for failed jobs (create via wrangler queues create som-connect-queue-dlq)
+# [[queues.producers]]
+# binding = "DLQ"
+# queue = "som-connect-queue-dlq"
+
+# ============ DURABLE OBJECTS ============
 [[durable_objects.bindings]]
 name = "QA_SESSION"
 class_name = "QASessionDurableObject"
@@ -45,15 +57,37 @@ class_name = "QASessionDurableObject"
 tag = "v1"
 new_classes = ["QASessionDurableObject"]
 
-# Cron for daily tasks
+# ============ CRON TRIGGERS ============
 [triggers]
-crons = ["0 0 * * *"] # Daily at midnight UTC
+crons = ["0 0 * * *"] # Daily at midnight UTC — cleanup, stats, confession check
 
-# Routes for production (uncomment when deploying)
+# ============ OBSERVABILITY ============
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# ============ DEV SERVER ============
+[dev]
+port = 8787
+ip = "0.0.0.0"
+
+# ============ ROUTES (uncomment for production) ============
 # [[routes]]
 # pattern = "api.som-connect.com/*"
 # zone_name = "som-connect.com"
 
-# For local dev, allow all origins
-[dev]
-port = 8787
+# [[routes]]
+# pattern = "api.som-connect.workers.dev/*"
+# zone_name = "workers.dev"
+
+# ============ ENVIRONMENTS ============
+[env.production]
+vars = { ENV = "production" }
+
+[env.production.d1_databases]
+binding = "DB"
+database_name = "som-connect-db-prod"
+database_id = "prod-som-connect-db-id"
+
+[env.staging]
+vars = { ENV = "staging", FRONTEND_URL = "https://staging.som-connect.vercel.app" }
