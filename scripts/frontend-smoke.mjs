@@ -205,12 +205,26 @@ try {
   });
 
   // -------------------------------------------------------------- upload
-  await check('upload media (multipart → R2)', async () => {
-    const file = new File([new Uint8Array([0, 0, 0, 24])], `smoke-${Date.now()}.mp4`, { type: 'video/mp4' });
-    const result = await uploads.uploadFile(file, { type: 'video', title: 'Smoke upload', description: 'integration test' });
-    return !!result?.id;
+  // Uploading is a creator action: the member is refused, the pastor succeeds.
+  await check('member upload refused (creator-only)', async () => {
+    const file = new File([new Uint8Array([0, 0, 0, 24])], `smoke-member-${Date.now()}.mp4`, { type: 'video/mp4' });
+    try {
+      await uploads.uploadFile(file, { type: 'video', title: 'Member attempt' });
+      return false;
+    } catch {
+      return true;
+    }
   });
-  await check('my uploads (creator)', async () => (await uploads.getMyUploads()).length > 0);
+  const pastorAuth = await check('pastor sign-in', async () => auth.login('pastor@example.com', 'pastor123'));
+  if (pastorAuth) {
+    await check('upload media (multipart → R2)', async () => {
+      const file = new File([new Uint8Array([0, 0, 0, 24])], `smoke-${Date.now()}.mp4`, { type: 'video/mp4' });
+      const result = await uploads.uploadFile(file, { type: 'video', title: 'Smoke upload', description: 'integration test' });
+      return !!result?.id;
+    });
+    await check('my uploads (creator)', async () => (await uploads.getMyUploads()).length > 0);
+  }
+  await check('member sign-in again for the member journeys', async () => auth.login('david.emmanuel@example.com', 'password123'));
 
   // ------------------------------------------------------------ admin API
   record('admin endpoints require a role (non-admin blocked)', true);

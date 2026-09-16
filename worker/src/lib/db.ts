@@ -25,6 +25,14 @@ export interface Env {
   APP_NAME?: string;
   APP_VERSION?: string;
   R2_PUBLIC_BASE_URL?: string;
+  /* Email (Resend). Without a key, mail is logged + kept in the KV outbox. */
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
+  SUPPORT_EMAIL?: string;
+  /* Payments. Without a key the deterministic mock provider is used. */
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  PAYMENT_WEBHOOK_SECRET?: string;
 }
 
 export type Role = 'guest' | 'member' | 'pastor' | 'admin';

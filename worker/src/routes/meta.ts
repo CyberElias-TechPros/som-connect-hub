@@ -215,6 +215,22 @@ meta.post('/newsletter', async (c) => {
 });
 
 /* GET /config — alias of /meta for older clients */
+/* GET /api/dev/outbox — local/test only: what would have been emailed */
+meta.get('/dev/outbox', async (c) => {
+  if (c.env.ENV === 'production') return errorResponse('Not available in production.', 404);
+  const { readOutbox } = await import('../lib/email');
+  const items = await readOutbox(c.env);
+  return ok({ items, count: items.length });
+});
+
+/* DELETE /meta/dev/outbox — clear it between test runs */
+meta.delete('/dev/outbox', async (c) => {
+  if (c.env.ENV === 'production') return errorResponse('Not available in production.', 404);
+  const { clearOutbox } = await import('../lib/email');
+  await clearOutbox(c.env);
+  return ok({ cleared: true });
+});
+
 meta.get('/config', async (c) => {
   return ok({
     apiVersion: '1',

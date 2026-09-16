@@ -238,20 +238,45 @@ async function main() {
   await expect('billing profile write', 'PUT', '/api/payments/billing', { body: { city: 'Lagos', country: 'Nigeria' } }, (json) => json?.billingInfo?.city === 'Lagos' || 'not saved');
   await expect('payment history', 'GET', '/api/payments/history', {}, (json) => Array.isArray(json?.items) || 'no history');
 
-  /* 11. Uploads (member → pastor/admin) */
+  /* 11. Uploads — a creator action: only pastors and admins may submit media */
+  const memberForm = new FormData();
+  memberForm.append('file', new Blob([new TextEncoder().encode('smoke test audio payload')], { type: 'audio/mpeg' }), 'smoke.mp3');
+  memberForm.append('type', 'audio');
+  memberForm.append('title', 'Member upload attempt');
+  await expect(
+    'member upload is refused (403, creator-only)',
+    'POST',
+    '/api/uploads',
+    { raw: true, expectStatus: 403, body: memberForm },
+    (json) => (json?.code === 'forbidden' ? true : 'wrong error code'),
+  );
+
+  const pastorLogin = await expect('pastor login', 'POST', '/api/auth/login', {
+    token: null,
+    body: { email: 'pastor@example.com', password: 'pastor123' },
+  }, (json) => !!json?.token || 'no token');
+  const pastorToken = pastorLogin.json?.token ?? state.token;
+
   const form = new FormData();
   form.append('file', new Blob([new TextEncoder().encode('smoke test audio payload')], { type: 'audio/mpeg' }), 'smoke.mp3');
   form.append('type', 'audio');
   form.append('title', 'Smoke Test Upload');
-  await expect('member upload accepted', 'POST', '/api/uploads', { raw: true, body: form, headers: {} }, (json) => !!json?.id || 'no upload id');
-  await expect('my uploads', 'GET', '/api/uploads', {}, (json) => Array.isArray(json?.items) || 'no items');
-  await expect('upload stats', 'GET', '/api/uploads/stats', {}, (json) => !!json?.counts || 'no counts');
+  await expect('pastor upload accepted', 'POST', '/api/uploads', { raw: true, token: pastorToken, body: form }, (json) => !!(json?.id || json?.upload?.id) || 'no upload id');
+  await expect('my uploads', 'GET', '/api/uploads', { token: pastorToken }, (json) => Array.isArray(json?.items) || 'no items');
+  await expect('upload stats', 'GET', '/api/uploads/stats', { token: pastorToken }, (json) => !!json?.counts || 'no counts');
   await expect(
     'upload without a file returns a friendly 400',
     'POST',
     '/api/uploads',
-    { raw: true, expectStatus: 400, body: (() => { const f = new FormData(); f.append('title', 'no file'); return f; })() },
+    { raw: true, token: pastorToken, expectStatus: 400, body: (() => { const f = new FormData(); f.append('title', 'no file'); return f; })() },
     (json) => (json?.ok === false ? true : 'no error body'),
+  );
+  await expect(
+    'avatar upload stays open to members',
+    'POST',
+    '/api/uploads/avatar',
+    { raw: true, expectStatus: [200, 400], body: (() => { const f = new FormData(); f.append('file', new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }), 'me.png'); return f; })() },
+    (json) => (json?.ok !== false || 'no error body'),
   );
 
   /* 12. Admin journeys (seed admin credentials) */

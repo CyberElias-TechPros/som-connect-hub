@@ -8,6 +8,46 @@ export interface PaymentMethod {
   brand: string;
   isDefault: boolean;
   expiry: string;
+  /** True when the method is a gateway test reference (always declines). */
+  isTest?: boolean;
+}
+
+export interface BillingSubscription {
+  id: string;
+  planId: string;
+  planName: string;
+  price: number;
+  currency: string;
+  interval: string;
+  status: 'active' | 'trialing' | 'past_due' | 'cancelled' | 'expired';
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  pendingPlanId: string | null;
+  failedPaymentCount: number;
+  lastPaymentError: string | null;
+  nextRetryAt: string | null;
+  autoRenew: boolean;
+}
+
+export interface Invoice {
+  id: string;
+  number: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  description: string;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  paidAt?: string | null;
+  issuedAt: string;
+}
+
+export interface PlanChangeResult {
+  mode: 'immediate' | 'at_period_end';
+  proration?: { credit: number; charge: number; dueNow: number; daysRemaining: number };
+  invoice?: Invoice | null;
+  message: string;
 }
 
 export interface BillingInfo {
@@ -92,6 +132,71 @@ export const PaymentService = {
     await apiClient.put(`/payments/methods/${id}/default`, {});
   },
 
+  /** GET /subscriptions/me — the full billing state (period, dunning, pending plan). */
+  async getSubscription(): Promise<{ subscription: BillingSubscription | null; isPremium: boolean; status: string }> {
+    return apiClient.tryApi(
+      async () => {
+        const data = await apiClient.get<{ subscription: BillingSubscription | null; isPremium: boolean; status: string }>('/subscriptions/me');
+        return { subscription: data.subscription ?? null, isPremium: !!data.isPremium, status: data.status ?? 'free' };
+      },
+      async () => {
+        const legacy = await this.getCurrentSubscription();
+        return legacy
+          ? {
+              subscription: {
+                id: legacy.id,
+                planId: legacy.planId,
+                planName: 'Premium',
+                price: 9.99,
+                currency: 'USD',
+                interval: 'monthly',
+                status: legacy.status === 'cancelled' ? 'cancelled' : 'active',
+                currentPeriodStart: legacy.createdAt,
+                currentPeriodEnd: legacy.currentPeriodEnd,
+                cancelAtPeriodEnd: false,
+                pendingPlanId: null,
+                failedPaymentCount: 0,
+                lastPaymentError: null,
+                nextRetryAt: null,
+                autoRenew: legacy.autoRenew,
+              },
+              isPremium: legacy.status === 'active',
+              status: legacy.status,
+            }
+          : { subscription: null, isPremium: false, status: 'free' };
+      },
+      { label: 'subscription' },
+    );
+  },
+
+  /** GET /subscriptions/invoices — receipts, newest first. */
+  async getInvoices(): Promise<Invoice[]> {
+    return apiClient.tryApi(
+      async () => (await apiClient.get<{ items: Invoice[] }>('/subscriptions/invoices')).items,
+      () => [],
+      { label: 'invoices' },
+    );
+  },
+
+  /** GET /subscriptions/invoices/:id — a printable receipt with the billed-to block. */
+  async getInvoice(id: string) {
+    return apiClient.tryApi(
+      async () => (await apiClient.get<{ invoice: Invoice & { billedTo: { name: string; email: string }; seller: { name: string; support: string } } }>(`/subscriptions/invoices/${id}`)).invoice,
+      () => null,
+      { label: 'receipt' },
+    );
+  },
+
+  /**
+   * POST /subscriptions/renew — retry a failed payment.
+   * Throws on a decline (402) so the UI can show the gateway message; it never
+   * fakes success.
+   */
+  async renewSubscription(paymentMethodId?: string): Promise<BillingSubscription | null> {
+    const data = await apiClient.post<{ subscription: BillingSubscription }>('/subscriptions/renew', paymentMethodId ? { paymentMethodId } : {});
+    return data.subscription ?? null;
+  },
+
   async getCurrentSubscription(): Promise<Subscription | null> {
     return apiClient.tryApi(async () => {
       const data = await apiClient.get<{ subscription: any }>('/subscriptions/me');
@@ -111,6 +216,11 @@ export const PaymentService = {
     });
   },
 
+  /**
+   * POST /subscriptions — activate a plan.
+   * A decline propagates as an ApiError (the UI shows the gateway message);
+   * only transport-level failures fall back to the local demo subscription.
+   */
   async createSubscription(planId: string, paymentMethodId: string): Promise<Subscription> {
     return apiClient.tryApi(async () => {
       const data = await apiClient.post<any>('/subscriptions', { planId, paymentMethodId });
@@ -192,14 +302,31 @@ export const PaymentService = {
     );
   },
 
-  /** PUT /subscriptions/me — change plan without leaving the app. */
-  async changePlan(planId: string): Promise<void> {
-    await apiClient.put('/subscriptions/me', { planId });
+  /**
+   * PUT /subscriptions/me — prorated plan change.
+   * Returns how the change was applied (immediate vs at period end) plus the
+   * proration; throws on a declined prorated charge.
+   */
+  async changePlan(planId: string, options: { immediately?: boolean; paymentMethodId?: string } = {}): Promise<PlanChangeResult> {
+    const data = await apiClient.put<PlanChangeResult>('/subscriptions/me', { planId, ...options });
+    return data;
   },
 
   /** POST /subscriptions/resume */
   async resumeSubscription(): Promise<void> {
     await apiClient.post('/subscriptions/resume', {});
+  },
+
+  /** GET /subscriptions/status — light premium check (paywall, player). */
+  async getSubscriptionStatus(): Promise<{ isPremium: boolean; status: string; cancelAtPeriodEnd: boolean }> {
+    return apiClient.tryApi(
+      async () => {
+        const data = await apiClient.get<{ isPremium: boolean; status: string; cancelAtPeriodEnd: boolean }>('/subscriptions/status');
+        return { isPremium: !!data.isPremium, status: data.status ?? 'free', cancelAtPeriodEnd: !!data.cancelAtPeriodEnd };
+      },
+      () => ({ isPremium: false, status: 'free', cancelAtPeriodEnd: false }),
+      { label: 'subscription status' },
+    );
   },
 
   async getBillingInfo(): Promise<BillingInfo> {

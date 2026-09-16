@@ -21,7 +21,14 @@
     "storage:create": "wrangler r2 bucket create som-connect-storage",
     "queue:create": "wrangler queues create som-connect-jobs",
     "test": "node test/smoke.test.mjs",
-    "test:ci": "node test/smoke.test.mjs --ci"
+    "test:ci": "node test/smoke.test.mjs --ci",
+    "provision:check": "node scripts/provision.mjs --check",
+    "provision:staging": "node scripts/provision.mjs --env staging",
+    "provision:prod": "node scripts/provision.mjs --env production",
+    "preflight": "node scripts/preflight.mjs",
+    "preflight:prod": "node scripts/preflight.mjs --env production",
+    "verify": "npm run typecheck && npm run preflight && npm test",
+    "test:stories": "node ../scripts/stories-smoke.mjs"
   },
   "dependencies": {
     "hono": "^4.6.0"

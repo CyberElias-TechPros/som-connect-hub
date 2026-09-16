@@ -57,8 +57,8 @@ export async function uploadToR2(
   return key;
 }
 
-export async function getFromR2(bucket: R2Bucket, key: string): Promise<R2ObjectBody | null> {
-  return bucket.get(key);
+export async function getFromR2(bucket: R2Bucket, key: string, range?: R2Range): Promise<R2ObjectBody | R2Object | null> {
+  return bucket.get(key, range ? { range } : undefined);
 }
 
 export async function deleteFromR2(bucket: R2Bucket, key: string): Promise<void> {

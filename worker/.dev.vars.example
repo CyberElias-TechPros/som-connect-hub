@@ -21,3 +21,19 @@ STRICT_AUTH=false
 # Public base URL for R2 objects (custom domain / r2.dev). Leave empty to serve
 # media through the worker at /uploads/file/<key>.
 # R2_PUBLIC_BASE_URL=
+
+# ---------------------------------------------------------------------------
+# Optional integrations (every flow works without them)
+# ---------------------------------------------------------------------------
+
+# Transactional email. Without this key, mail is logged and kept in a KV
+# outbox you can read at GET /api/dev/outbox — so password reset and receipts
+# still run end-to-end locally.
+# RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxx
+EMAIL_FROM=SOM CONNECT <no-reply@somconnect.org>
+SUPPORT_EMAIL=support@somconnect.org
+
+# Payments. Without a Stripe key the deterministic mock provider is used
+# (pm_card_visa succeeds, pm_card_declined/insufficient/expired fail).
+# STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxx
+# PAYMENT_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx

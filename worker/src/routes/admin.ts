@@ -71,6 +71,39 @@ async function dashboardStats(c: Context<AppEnv>) {
   };
 }
 
+
+/** Email the submitter about a review decision (fire-and-forget). */
+async function notifyUploadReview(
+  c: Context<AppEnv>,
+  upload: any,
+  approved: boolean,
+  feedback: string,
+): Promise<void> {
+  try {
+    const reviewer = c.get('user');
+    const owner = await c.env.DB.prepare('SELECT id, name, email FROM users WHERE id = ?').bind(upload.user_id).first<any>();
+    if (!owner?.email) return;
+    await c.env.DB.prepare('INSERT INTO notifications (id, user_id, type, title, message, action_url) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(
+        generateId('notif_'),
+        owner.id,
+        'system',
+        approved ? 'Submission approved' : 'Submission needs attention',
+        approved ? `"${upload.title}" is now live in the library.` : `"${upload.title}" was not approved: ${feedback || 'please review the guidelines.'}`,
+        approved ? '/library' : '/submissions',
+      )
+      .run();
+    const { sendEmail, templates } = await import('../lib/email');
+    await sendEmail(c.env, {
+      to: owner.email,
+      ...templates.uploadReviewed(owner.name ?? 'friend', upload.title, approved, feedback),
+    });
+    console.log(`[admin] review email sent to ${owner.email} (${approved ? 'approved' : 'rejected'}) by ${reviewer?.email}`);
+  } catch (error) {
+    console.error('[admin] review notification failed', error);
+  }
+}
+
 admin.get('/stats', async (c) => ok(await dashboardStats(c)));
 admin.get('/dashboard', async (c) => ok(await dashboardStats(c)));
 
@@ -192,6 +225,9 @@ admin.put('/users/:id/status', async (c) => {
   const id = c.req.param('id');
   const body = await readJson(c);
   const isActive = body.isActive !== false && body.is_active !== 0;
+  if (c.get('user').id === id && !isActive) {
+    return errorResponse('You cannot suspend your own account.', 400);
+  }
   await c.env.DB.prepare('UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?')
     .bind(isActive ? 1 : 0, new Date().toISOString(), id)
     .run();
@@ -268,6 +304,7 @@ admin.post('/uploads/:id/approve', async (c) => {
   }
 
   audit(c, 'admin.upload.approve', 'pastor_upload', id, { contentId });
+  await notifyUploadReview(c, upload, true, typeof body.feedback === 'string' ? body.feedback : '');
   return ok({ id, status: 'approved', contentId, message: 'Upload approved and published.' });
 });
 
@@ -294,6 +331,7 @@ admin.post('/uploads/:id/reject', async (c) => {
   }
 
   audit(c, 'admin.upload.reject', 'pastor_upload', id);
+  await notifyUploadReview(c, upload, false, typeof body.feedback === 'string' ? body.feedback : (body.reason ?? ''));
   return ok({ id, status: 'rejected', feedback, message: 'Upload rejected with feedback.' });
 });
 

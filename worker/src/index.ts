@@ -17,6 +17,8 @@ import { Env, ensureDatabase } from './lib/db';
 import { corsConfig, errorResponse, jsonResponse, ok, securityHeaders } from './lib/http';
 import { resolveAuth, type AppEnv } from './lib/middleware';
 import { createNotification } from './lib/daily';
+import { sendEmail, templates, appBaseUrl } from './lib/email';
+import { processDueRenewals } from './lib/billing';
 import { QASessionDurableObject } from './durable/qa';
 
 import authRoutes from './routes/auth';
@@ -125,6 +127,9 @@ async function handleQueue(batch: MessageBatch<any>, env: Env): Promise<void> {
             'Your journey begins now. Explore teachings, daily tools and community.',
             '/',
           );
+          if (payload.email) {
+            await sendEmail(env, { to: payload.email, ...templates.welcome(payload.name ?? 'friend') });
+          }
           break;
         }
 
@@ -150,20 +155,44 @@ async function handleQueue(batch: MessageBatch<any>, env: Env): Promise<void> {
         }
 
         case 'subscription_created': {
-          await createNotification(
-            env,
-            payload.userId,
-            'system',
-            'Premium activated',
-            'Your subscription is active. Enjoy HD streaming, offline downloads and exclusive content.',
-            '/manage-subscription',
-          );
+          // The billing engine already wrote the in-app notification + receipt;
+          // this keeps the queue path honest for older messages.
+          const already = await env.DB.prepare(
+            "SELECT id FROM notifications WHERE user_id = ? AND title = 'Premium activated' ORDER BY created_at DESC LIMIT 1",
+          )
+            .bind(payload.userId)
+            .first<{ id: string }>();
+          if (!already) {
+            await createNotification(
+              env,
+              payload.userId,
+              'system',
+              'Premium activated',
+              'Your subscription is active. Enjoy HD streaming, offline downloads and exclusive content.',
+              '/manage-subscription',
+            );
+          }
+          break;
+        }
+
+        case 'upload_reviewed': {
+          if (payload.email) {
+            await sendEmail(env, {
+              to: payload.email,
+              ...templates.uploadReviewed(payload.name ?? 'friend', payload.title ?? 'your upload', !!payload.approved, payload.feedback ?? ''),
+            });
+          }
           break;
         }
 
         case 'password_reset': {
-          // Wire an email provider (Resend/SendGrid) here for production.
-          console.log(`[queue] password reset requested for ${payload.email}`);
+          // Delivered through lib/email: Resend when configured, otherwise the
+          // KV-backed outbox so the flow is still end-to-end testable.
+          const link = `${appBaseUrl(env)}/forgot-password?token=${encodeURIComponent(payload.token ?? '')}&email=${encodeURIComponent(payload.email ?? '')}`;
+          await sendEmail(env, {
+            to: payload.email,
+            ...templates.passwordReset(payload.name ?? 'friend', payload.token ?? '', link),
+          });
           break;
         }
 
@@ -192,7 +221,12 @@ async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionCo
       await ensureConfessionForDate(env, today).catch((error) => console.error('[cron] confession', error));
       await ensureRorForDate(env, today).catch((error) => console.error('[cron] ror', error));
 
-      // 2. Expire lapsed subscriptions.
+      // 2. Billing: renew what is due, retry dunning, expire cancellations.
+      //    Errors here must never stop the rest of the run.
+      await processDueRenewals(env)
+        .then((summary) => console.log('[cron] billing', JSON.stringify(summary)))
+        .catch((error) => console.error('[cron] billing', error));
+
       await env.DB.prepare(
         `UPDATE user_subscriptions SET status = 'expired', updated_at = ?
          WHERE status = 'active' AND cancel_at_period_end = 1 AND current_period_end < ?`,

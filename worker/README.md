@@ -65,7 +65,12 @@ password verification.
 | `npm run db:console` | `SELECT id, email, role FROM users` (local) |
 | `npm run storage:create` | Create the R2 bucket |
 | `npm run queue:create` | Create the queue (+ DLQ) |
-| `npm test` / `npm run test:ci` | Happy-path smoke suite |
+| `npm test` / `npm run test:ci` | Happy-path smoke suite (118 assertions) |
+| `npm run test:stories` | User-story suite from `../docs/USER_STORIES.md` |
+| `npm run preflight` / `preflight:prod` | Deploy gate: bindings, placeholders, SQL freshness, secrets |
+| `npm run verify` | typecheck → preflight → smoke, in order |
+| `npm run provision:check` | Verify Cloudflare auth + config, change nothing |
+| `npm run provision:staging` / `:prod` | D1 → ids → R2 → KV → Queues → migrations → secrets (optional `--deploy`) |
 | `npm run deploy` | Deploy to production (`--env production`) |
 | `npm run deploy:staging` | Deploy to staging |
 
@@ -108,9 +113,10 @@ All routes are served both at the root (`/content`) and under `/api`
 | Q&A | `GET /qa`, `GET /qa/:id`, `GET /qa/:id/live`, `GET /qa/:id/ws`, `POST /qa/:id/questions`, `POST /qa/:id/questions/:questionId/upvote`, `POST /qa/:id/join`, `POST /qa/:id/leave` |
 | Daily tools | `GET /tools/bundle`, `/tools/confessions[/:date]`, `/tools/ror[/:date]`, `/tools/streak`, `/tools/plan`, `/tools/completions`, `/tools/publications`; `POST /tools/complete` |
 | Notifications | `GET|POST /notifications`, `GET /notifications/unread-count`, `PUT /notifications/read-all`, `PUT /notifications/:id/read`, `PUT /notifications/:id/unread`, `DELETE /notifications[/:id]`, `GET|PUT /notifications/settings` |
-| Subscriptions | `GET /subscriptions/plans`, `/subscriptions/me`, `/subscriptions/status`, `/subscriptions/invoices`; `POST /subscriptions`, `PUT /subscriptions/me`, `POST /subscriptions/cancel`, `POST /subscriptions/resume` |
-| Payments | `GET|POST /payments/methods`, `DELETE /payments/methods/:id`, `PUT /payments/methods/:id/default`, `GET|PUT /payments/billing`, `POST /payments/intents`, `POST /payments/confirm`, `POST /payments/validate`, `GET /payments/history` |
-| Uploads | `POST /uploads` (multipart → R2), `GET /uploads`, `GET /uploads/all`, `GET /uploads/stats`, `GET /uploads/file/:key` (public media), `POST /uploads/avatar`, `DELETE /uploads/:id` |
+| Subscriptions | `GET /subscriptions/plans`, `/subscriptions/me`, `/subscriptions/status`, `/subscriptions/invoices`, `/subscriptions/invoices/:id`; `POST /subscriptions`, `PUT /subscriptions/me`, `POST /subscriptions/cancel`, `POST /subscriptions/resume`, `POST /subscriptions/renew`, `POST /subscriptions/process-due` (admin) |
+| Payments | `GET|POST /payments/methods`, `DELETE /payments/methods/:id`, `PUT /payments/methods/:id/default`, `GET|PUT /payments/billing`, `POST /payments/intents`, `POST /payments/confirm`, `POST /payments/validate`, `GET /payments/history`, `POST /payments/webhook` (signature verified) |
+| Uploads | `POST /uploads` (pastor/admin, multipart → R2), `GET /uploads`, `GET /uploads/all`, `GET /uploads/stats`, `GET /uploads/file/:key` (public media, HTTP Range → 206), `POST /uploads/avatar` (any member), `DELETE /uploads/:id` |
+| Dev only | `GET|DELETE /dev/outbox` (what the queue would have emailed; 404 in production) |
 | Admin | `GET /admin/stats`, `/admin/dashboard`, `/admin/analytics`, `/admin/users`, `/admin/uploads`, `/admin/moderation/posts`, `/admin/audit-logs`; `PUT /admin/users/:id/role`, `/admin/users/:id/status`, `DELETE /admin/users/:id`, `POST /admin/uploads/:id/approve|reject`, `POST /admin/broadcast`, `POST /admin/maintenance` |
 
 Response conventions:
@@ -143,23 +149,57 @@ npx wrangler d1 execute som-connect-db --local --persist-to .wrangler/state \
 
 ---
 
+## Money rules
+
+Implemented once in `src/lib/billing.ts` (engine) on top of `src/lib/payments.ts`
+(pure rules), so a user action, the cron job and a gateway webhook all behave
+identically:
+
+- A **successful** charge locks its idempotency key (`payment_events`); a failed
+  one does not, so a member can retry after a decline. Replays never double-charge.
+- Every successful charge writes an invoice (`INV-YYYY-NNNN`, period, `paid_at`)
+  and emails the receipt.
+- Upgrade = prorated charge now; downgrade = `pending_plan_id` applied at period
+  end; cancel = at period end by default (immediate on request); resume works
+  while the paid period is running.
+- Renewals: `+3 / +5 / +7 days` dunning, `past_due` keeps premium access during
+  the grace window, then the subscription expires. The nightly job only retries
+  when `next_retry_at` has arrived.
+- Cards are validated (Luhn/expiry/CVC) before being stored; only `brand`,
+  `last4` and a gateway token are kept. "Default card" is the card that gets
+  charged, including for an existing subscription.
+- Providers: Stripe when `STRIPE_SECRET_KEY` is set, otherwise a
+  deterministic mock (`pm_card_visa` succeeds, `pm_card_declined`,
+  `pm_card_insufficient`, `pm_card_expired` decline, as do those card numbers
+  once stored).
+
+---
+
 ## Background work
 
-- **Queue jobs:** `welcome`, `new_content`, `subscription_created`, `password_reset`
-- **Cron (`5 0 * * *`):** ensure today's confession/ROR exist, expire lapsed
-  subscriptions, send daily reminders (up to 500 users), delete notifications
-  older than 60 days and expired reset tokens, warm the KV `stats:daily` cache
+- **Queue jobs:** `welcome`, `new_content`, `new_post`, `new_question`,
+  `subscription_created`, `upload_reviewed`, `password_reset` (batched on
+  `max_batch_timeout = 5s`; emails go to Resend when `RESEND_API_KEY` is set,
+  otherwise to the KV outbox)
+- **Cron (`5 0 * * *`):** `processDueRenewals()` first (renew, retry dunning,
+  expire lapsed), then ensure today's confession/ROR exist, send daily reminders
+  (up to 500 users), delete notifications older than 60 days and expired reset
+  tokens, warm the KV `stats:daily` cache
 - **Durable Object:** per-session rooms; HTTP `join`/`leave`/`question`/
   `broadcast`/`stats` plus WebSocket upgrades, with D1 fallbacks when the DO is
   unreachable
+
+The full ordered runbook is in [`../docs/PROCESSES.md`](../docs/PROCESSES.md).
 
 ---
 
 ## Testing
 
 ```bash
-npm test                                   # 115 happy-path assertions
+npm test                                   # 118 happy-path assertions
 node test/smoke.test.mjs --base=http://127.0.0.1:8787
+npm run test:stories                       # 61 user-story assertions (needs ../scripts)
+npm run verify                             # typecheck + preflight + smoke, in order
 ```
 
 The suite covers health, auth (member/pastor/admin), content, favorites,

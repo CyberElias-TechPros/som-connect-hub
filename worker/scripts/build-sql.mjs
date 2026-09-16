@@ -54,7 +54,7 @@ export const SEED_SQL = ${literal(seedSql)};
 export const SEED_EXEC_SQL = ${literal(compact(seedSql))};
 
 /** Bump when schema.sql changes so isolates re-run the bootstrap check. */
-export const SCHEMA_VERSION = '3';
+export const SCHEMA_VERSION = '6';
 `;
 
 writeFileSync(join(root, 'src/db/sql.generated.ts'), generated);

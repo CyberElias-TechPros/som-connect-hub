@@ -22,7 +22,27 @@ uploads.get('/file/*', async (c) => {
   const key = decodeURIComponent(c.req.path.replace(/^.*\/uploads\/file\//, ''));
   if (!key) return errorResponse('A storage key is required.', 400);
 
-  const object = await getFromR2(c.env.STORAGE, key).catch(() => null);
+  const rangeHeader = c.req.header('range');
+  let range: R2Range | undefined;
+  let partial = false;
+
+  if (rangeHeader) {
+    // `bytes=START-END` / `bytes=START-` / `bytes=-SUFFIX` — video seeking needs
+    // 206 responses, otherwise players refuse to scrub.
+    const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+    if (match) {
+      const [, startRaw, endRaw] = match;
+      if (startRaw === '' && endRaw !== '') {
+        range = { suffix: Number(endRaw) };
+      } else if (startRaw !== '') {
+        const offset = Number(startRaw);
+        range = endRaw !== '' ? { offset, length: Math.max(0, Number(endRaw) - offset + 1) } : { offset };
+      }
+      partial = true;
+    }
+  }
+
+  const object = await getFromR2(c.env.STORAGE, key, range).catch(() => null);
   if (!object) return errorResponse('That file is not available.', 404);
 
   const headers = new Headers();
@@ -30,9 +50,21 @@ uploads.get('/file/*', async (c) => {
   headers.set('etag', object.httpEtag);
   headers.set('Cache-Control', headers.get('Cache-Control') ?? 'public, max-age=31536000, immutable');
   headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
   headers.set('Accept-Ranges', 'bytes');
 
-  return new Response(object.body, { headers });
+  const body = (object as R2ObjectBody).body;
+  const ranged = (object as { range?: { offset: number; length?: number } }).range;
+  const total = (object as R2Object).size;
+
+  if (partial && body && ranged) {
+    const length = ranged.length ?? Math.max(0, total - ranged.offset);
+    headers.set('Content-Range', `bytes ${ranged.offset}-${ranged.offset + length - 1}/${total}`);
+    headers.set('Content-Length', String(length));
+    return new Response(body, { status: 206, headers });
+  }
+
+  return new Response(body, { headers });
 });
 
 /* ------------------------------------------------------------------ *
@@ -41,6 +73,11 @@ uploads.get('/file/*', async (c) => {
 uploads.post('/', async (c) => {
   const user = c.get('user');
   if (!user) return errorResponse('Authentication required.', 401);
+  // Submitting teaching media is a creator action (story S30): pastors and
+  // admins only. Members keep their avatar upload via POST /uploads/avatar.
+  if (!['pastor', 'admin'].includes(user.role)) {
+    return errorResponse('Only pastors and administrators can upload teachings.', 403, 'forbidden');
+  }
 
   let form: FormData;
   try {

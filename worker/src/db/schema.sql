@@ -295,6 +295,16 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
   current_period_end TEXT NOT NULL,
   cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
   cancelled_at TEXT,
+  -- Bill at this amount (kept when a plan's price changes later).
+  amount REAL,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  -- Downgrades apply when the paid period ends.
+  pending_plan_id TEXT REFERENCES subscription_plans(id) ON DELETE SET NULL,
+  -- Dunning: failed renewal bookkeeping.
+  failed_payment_count INTEGER NOT NULL DEFAULT 0,
+  last_payment_error TEXT,
+  next_retry_at TEXT,
+  last_charge_reference TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
@@ -312,6 +322,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
   expiry TEXT,
   holder TEXT,
   is_default INTEGER NOT NULL DEFAULT 0,
+  token TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_payment_methods_user ON payment_methods(user_id);
@@ -340,6 +351,7 @@ CREATE TABLE IF NOT EXISTS payment_intents (
   plan_id TEXT,
   client_secret TEXT NOT NULL,
   description TEXT,
+  payment_method_id TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
@@ -348,12 +360,16 @@ CREATE INDEX IF NOT EXISTS idx_payment_intents_user ON payment_intents(user_id, 
 -- Subscription/invoice ledger
 CREATE TABLE IF NOT EXISTS invoices (
   id TEXT PRIMARY KEY,
+  number TEXT, -- sequential per year: INV-2026-0007
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   subscription_id TEXT REFERENCES user_subscriptions(id) ON DELETE SET NULL,
   amount REAL NOT NULL,
   currency TEXT NOT NULL DEFAULT 'USD',
   status TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('paid','open','void')),
   description TEXT,
+  period_start TEXT,
+  period_end TEXT,
+  paid_at TEXT,
   issued_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_user ON invoices(user_id, issued_at DESC);
@@ -420,6 +436,20 @@ CREATE TABLE IF NOT EXISTS password_resets (
 CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
 
 -- Audit log
+-- Webhook (and charge) idempotency: one row per gateway event, so a retried
+-- delivery can never double-apply a payment or duplicate an invoice.
+CREATE TABLE IF NOT EXISTS payment_events (
+  id TEXT PRIMARY KEY, -- gateway event id, or our own key for internal retries
+  type TEXT NOT NULL,
+  user_id TEXT,
+  subscription_id TEXT,
+  amount REAL,
+  payload TEXT,
+  processed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_events_type ON payment_events(type);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users(id) ON DELETE SET NULL,

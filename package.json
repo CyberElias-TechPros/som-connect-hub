@@ -12,7 +12,8 @@
     "test:api": "node scripts/api-contract.mjs",
     "test:frontend": "node scripts/frontend-smoke.mjs",
     "test:pages": "node scripts/page-smoke.mjs",
-    "test": "node scripts/api-contract.mjs && node scripts/frontend-smoke.mjs && node scripts/page-smoke.mjs"
+    "test:stories": "node scripts/stories-smoke.mjs",
+    "test": "node scripts/api-contract.mjs && node scripts/frontend-smoke.mjs && node scripts/page-smoke.mjs && node scripts/stories-smoke.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

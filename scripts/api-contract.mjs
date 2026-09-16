@@ -132,8 +132,13 @@ const CHECKS = [
   ['payments.saveBilling', 'PUT', '/payments/billing', { role: 'member', ...jsonPut({ country: 'NG' }) }],
   ['payments.history', 'GET', '/payments/history', { role: 'member' }],
   ['payments.intents', 'POST', '/payments/intents', { role: 'member', ...jsonPost({ amount: 9.99, currency: 'USD', planId: 'premium-monthly' }) }],
-  ['payments.confirm', 'POST', '/payments/confirm', { role: 'member', ...jsonPost({ intentId: 'pi_probe', methodId: 'pm_card_visa' }) }],
+  ['payments.confirm', 'POST', '/payments/confirm', { role: 'member', ...jsonPost({ amount: 4.99, currency: 'USD', methodId: 'pm_card_visa', description: 'Contract probe' }) }],
   ['payments.validate', 'POST', '/payments/validate', { role: 'member', ...jsonPost({ number: '4242424242424242' }) }],
+  ['payments.webhook', 'POST', '/payments/webhook', { role: 'anon', ...jsonPost({ id: 'evt_contract', type: 'customer.updated', data: { object: {} } }) }],
+  ['subscriptions.renew', 'POST', '/subscriptions/renew', { role: 'pastor', ...jsonPost({}) }],
+  ['subscriptions.processDue', 'POST', '/subscriptions/process-due', { role: 'admin', ...jsonPost({}) }],
+  ['subscriptions.invoiceDetail', 'GET', '/subscriptions/invoices/inv_probe', { role: 'member' }],
+  ['meta.devOutbox', 'GET', '/dev/outbox', { role: 'anon' }],
 
   // uploads
   ['uploads.create', 'POST', '/uploads', { role: 'pastor', body: formed }],

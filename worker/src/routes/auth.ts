@@ -217,7 +217,7 @@ auth.post('/forgot', async (c) => {
       )
       .run();
     try {
-      await c.env.QUEUE?.send({ type: 'password_reset', email, token, userId: user.id });
+      await c.env.QUEUE?.send({ type: 'password_reset', email, token, userId: user.id, name: user.name });
     } catch {
       console.log(`[auth] password reset link for ${email}: /forgot-password?token=${token}`);
     }
