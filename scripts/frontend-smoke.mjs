@@ -118,13 +118,19 @@ try {
   });
 
   // ----------------------------------------------------------- favorites
-  await check('favorites seed into local store', async () => (await favorites.sync()).length > 0);
+  // Seed-independent: another suite's "clear favorites" journey empties the
+  // user's D1 favorites, so prove the sync path by round-tripping our own row.
   await check('favorite add + remove round-trip', async () => {
-    const target = '2';
+    const synced = await favorites.sync();
+    const library = (await content.list({ limit: 50 })).items;
+    const target = library.find((item) => !synced.some((favorite) => favorite.contentId === item.id))?.id;
+    if (!target) return false;
+
     await favorites.addToFavorites(target, 'smoke test');
     await new Promise((resolve) => setTimeout(resolve, 500)); // let the POST land
     await favorites.sync();
     const added = favorites.isFavorited(target);
+
     await favorites.removeFromFavorites(target);
     await new Promise((resolve) => setTimeout(resolve, 500)); // let the DELETE land
     await favorites.sync();

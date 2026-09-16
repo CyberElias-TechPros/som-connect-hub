@@ -140,17 +140,22 @@ export const toolsService = {
     });
   },
 
-  async markComplete(type: 'confession' | 'ror'): Promise<{ streak: number }> {
+  /**
+   * POST /tools/complete — marks a devotional done and returns the new streak.
+   * `date` defaults to today on the Worker; pass one to back-fill a missed day
+   * from the reading plan.
+   */
+  async markComplete(type: 'confession' | 'ror', date?: string): Promise<{ streak: number }> {
     return apiClient.tryApi(async () => {
-      const data = await apiClient.post<{ streak: number }>('/tools/complete', { type });
+      const data = await apiClient.post<{ streak: number }>('/tools/complete', date ? { type, date } : { type });
       return data;
     }, async () => {
       try {
         const key = 'som_daily_completions';
-        const today = new Date().toISOString().split('T')[0];
+        const target = date ?? new Date().toISOString().split('T')[0];
         const stored = JSON.parse(localStorage.getItem(key) || '{}');
-        if (!stored[today]) stored[today] = [];
-        if (!stored[today].includes(type)) stored[today].push(type);
+        if (!stored[target]) stored[target] = [];
+        if (!stored[target].includes(type)) stored[target].push(type);
         localStorage.setItem(key, JSON.stringify(stored));
       } catch {}
       return { streak: Math.floor(Math.random()*20)+1 };

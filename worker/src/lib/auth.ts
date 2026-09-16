@@ -99,6 +99,38 @@ export function isPlaceholderHash(stored: string | null | undefined): boolean {
  * Tokens
  * ------------------------------------------------------------------ */
 
+/**
+ * Documented local development secret (see worker/.dev.vars.example).
+ *
+ * A missing `JWT_SECRET` used to surface as an opaque
+ * `TypeError: Cannot read properties of undefined (reading 'includes')` from
+ * hono/jwt on *every* sign-in — including register, reset and session checks.
+ * Resolve it deliberately instead: production fails with an actionable message,
+ * everything else keeps a working happy path (fresh clones and preview
+ * environments often run without `.dev.vars`).
+ */
+export const DEV_JWT_SECRET = 'local-dev-secret-change-me-to-32-chars-long';
+
+let warnedAboutMissingSecret = false;
+
+export function resolveJwtSecret(env: { JWT_SECRET?: string; ENV?: string }): string {
+  const configured = env.JWT_SECRET?.trim();
+  if (configured) return configured;
+
+  if (env.ENV === 'production') {
+    throw new Error('JWT_SECRET is not configured. Run `npx wrangler secret put JWT_SECRET` before deploying.');
+  }
+
+  if (!warnedAboutMissingSecret) {
+    warnedAboutMissingSecret = true;
+    console.warn(
+      '[auth] JWT_SECRET is not set — falling back to the development secret. ' +
+        'Run `npx wrangler secret put JWT_SECRET` before deploying to production.',
+    );
+  }
+  return DEV_JWT_SECRET;
+}
+
 export async function createToken(
   user: { id: string; email: string; role: UserRole },
   secret: string,

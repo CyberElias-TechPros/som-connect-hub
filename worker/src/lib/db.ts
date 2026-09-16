@@ -15,7 +15,8 @@ export interface Env {
   CACHE: KVNamespace;
   QUEUE?: Queue;
   QA_SESSION?: DurableObjectNamespace;
-  JWT_SECRET: string;
+  /** Required in production (`wrangler secret put JWT_SECRET`); optional elsewhere. */
+  JWT_SECRET?: string;
   FRONTEND_URL?: string;
   ALLOWED_ORIGINS?: string;
   ALLOW_ALL_ORIGINS?: string;

@@ -2,7 +2,7 @@
  * SOM CONNECT — middleware: auth resolution, role gates, rate limiting, audit.
  */
 import { Env, ensureDatabase, getUserById, toBool, type Role } from './db';
-import { verifyToken, hasAtLeast, generateId, type UserRole } from './auth';
+import { verifyToken, hasAtLeast, generateId, resolveJwtSecret, type UserRole } from './auth';
 import { errorResponse } from './http';
 
 export type AppEnv = { Bindings: Env; Variables: { user?: any; requestId: string } };
@@ -28,7 +28,14 @@ export async function resolveAuth(c: any, next: () => Promise<void>): Promise<vo
 
   const token = bearerToken(c);
   if (token) {
-    const payload = await verifyToken(token, c.env.JWT_SECRET);
+    let payload = null;
+    try {
+      payload = await verifyToken(token, resolveJwtSecret(c.env));
+    } catch (error) {
+      // e.g. JWT_SECRET missing in production — stay unauthenticated instead of
+      // failing every route with an opaque 500.
+      console.error('[auth] could not verify token', (error as Error)?.message ?? error);
+    }
     if (payload) {
       const user = await getUserById(c.env.DB, payload.id);
       if (user && user.is_active !== 0) c.set('user', user);

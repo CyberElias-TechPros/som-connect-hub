@@ -206,7 +206,7 @@ const ROUTES = [
   { path: '/library/1', label: 'content detail', live: ['The Power of Faith in Action'] },
   { path: '/search?q=prayer', label: 'search', live: ['Foundations of Prayer'] },
   { path: '/tools', label: 'tools', live: ['Confession', 'Rhapsody'] },
-  { path: '/tools/ror-plan', label: 'ror plan' },
+  { path: '/tools/ror-plan', label: 'ror plan', live: ['Mark as read', 'Today'] },
   { path: '/publications', label: 'publications', live: ['Ministry Newsletter'] },
   { path: '/community', label: 'community', live: [smokePost] },
   { path: '/qa', label: 'qa sessions', live: ['Q&A Session'] },

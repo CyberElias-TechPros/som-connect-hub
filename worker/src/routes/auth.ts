@@ -9,16 +9,7 @@
  */
 import { Hono, type Context } from 'hono';
 import { Env, ensureDatabase, getUserByEmail, getUserById, parseJsonField, type UserRow } from '../lib/db';
-import {
-  createToken,
-  generateId,
-  hashPassword,
-  randomToken,
-  TOKEN_TTL_SECONDS,
-  toPublicUser,
-  verifyPassword,
-  type UserRole,
-} from '../lib/auth';
+import { createToken, generateId, hashPassword, randomToken, TOKEN_TTL_SECONDS, toPublicUser, verifyPassword, type UserRole, resolveJwtSecret } from '../lib/auth';
 import { audit, rateLimit, type AppEnv } from '../lib/middleware';
 import { errorResponse, normalizeEmail, ok, readJson, requireFields } from '../lib/http';
 import { createNotification } from '../lib/daily';
@@ -55,7 +46,7 @@ function displayNameFromEmail(email: string): string {
 }
 
 async function issueSession(env: Env, row: UserRow, created = false) {
-  const token = await createToken({ id: row.id, email: row.email, role: row.role }, env.JWT_SECRET);
+  const token = await createToken({ id: row.id, email: row.email, role: row.role }, resolveJwtSecret(env));
   return ok(
     {
       user: toPublicUser(row),
