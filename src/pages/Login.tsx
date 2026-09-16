@@ -1,14 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
+import { getDemoAccounts } from '@/services/auth-service';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
 import somLogo from '@/images/som-logo.png';
 import { motion } from 'framer-motion';
 
 export default function Login() {
+  // Demo credentials are served by the Worker (GET /auth/demo-accounts) so the
+  // quick-fill buttons always match what the backend expects.
+  const [demoAccounts, setDemoAccounts] = useState<Array<{ email: string; name: string; demoPassword: string }>>([]);
+  useEffect(() => {
+    getDemoAccounts()
+      .then((accounts) => setDemoAccounts(accounts))
+      .catch(() => undefined);
+  }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -157,12 +166,15 @@ export default function Login() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {[
-                  { name: 'Pastor demo', email: 'pastor@example.com' },
-                  { name: 'Admin demo', email: 'admin@example.com' },
-                ].map(b => (
-                  <button key={b.email} type="button" onClick={() => { setEmail(b.email); setPassword('demo123'); }} className="h-11 rounded-full border border-border bg-secondary/30 hover:bg-secondary/60 text-[13px] font-[600] tracking-[-0.01em] transition-colors">
-                    {b.name}
+                {(demoAccounts.length
+                  ? demoAccounts.slice(1) // skip the member account — the form is pre-filled with it
+                  : [
+                      { name: 'Pastor Michael', email: 'pastor@example.com', demoPassword: 'pastor123' },
+                      { name: 'Admin User', email: 'admin@example.com', demoPassword: 'admin123' },
+                    ]
+                ).slice(0, 2).map(b => (
+                  <button key={b.email} type="button" onClick={() => { setEmail(b.email); setPassword(b.demoPassword); }} className="h-11 rounded-full border border-border bg-secondary/30 hover:bg-secondary/60 text-[13px] font-[600] tracking-[-0.01em] transition-colors">
+                    {b.name.replace(' demo', '')} demo
                   </button>
                 ))}
               </div>

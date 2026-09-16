@@ -5,12 +5,24 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Play, Calendar, Clock, Users, Sparkles, ArrowRight, Video, Bell } from 'lucide-react';
-import { qaSessions } from '@/lib/mock-data';
+import { qaSessions as mockSessions } from '@/lib/mock-data';
+import { qaService } from '@/services/qa-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 
 export default function QASessions() {
+  // Live session list (statuses: live → upcoming → archived).
+  const { data: qaSessions } = useApiData(
+    async () => {
+      const items = await qaService.list();
+      return items.length ? items : mockSessions;
+    },
+    mockSessions,
+    [],
+    { pollMs: 45000 },
+  );
   const { toast } = useToast();
   const [reminders, setReminders] = useState<string[]>([]);
 

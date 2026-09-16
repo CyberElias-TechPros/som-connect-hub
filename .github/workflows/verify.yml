@@ -1,0 +1,76 @@
+name: verify
+
+# Runs the same chain as docs/PROCESSES.md §6, in order:
+#   typecheck → deploy gate → worker journeys → API contract → story flows →
+#   frontend journeys → page render → production build
+# The Worker and the app run locally (Miniflare + Vite), so no Cloudflare or
+# gateway credentials are needed.
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install (frontend + worker)
+        run: |
+          npm ci
+          cd worker && npm ci
+
+      - name: Types
+        run: |
+          npx tsc --noEmit -p tsconfig.json
+          cd worker && npx tsc --noEmit
+
+      - name: Local database
+        run: cd worker && npx wrangler d1 migrations apply som-connect-db --local --persist-to .wrangler/state
+
+      - name: Deploy gate (preflight)
+        run: cd worker && npm run preflight
+
+      - name: Start the stack
+        run: |
+          cd worker && nohup npx wrangler dev --port 8787 --ip 127.0.0.1 > /tmp/worker.log 2>&1 &
+          cd "$GITHUB_WORKSPACE" && nohup npx vite --host 127.0.0.1 --port 8080 > /tmp/vite.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8787/api/health > /dev/null && curl -sf http://127.0.0.1:8080/ > /dev/null; then
+              echo "stack is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "stack did not come up"; tail -40 /tmp/worker.log; exit 1
+
+      - name: Worker journeys
+        run: cd worker && npm test -- --ci
+
+      - name: API contract
+        run: node scripts/api-contract.mjs --api=http://127.0.0.1:8787
+
+      - name: User-story flows
+        run: node scripts/stories-smoke.mjs --api=http://127.0.0.1:8787
+
+      - name: Frontend ↔ backend journeys
+        run: node scripts/frontend-smoke.mjs --api=http://127.0.0.1:8080
+
+      - name: Every page renders with live data
+        run: node scripts/page-smoke.mjs
+
+      - name: Production build
+        run: npm run build
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          echo '--- worker ---'; tail -80 /tmp/worker.log || true
+          echo '--- vite ---'; tail -40 /tmp/vite.log || true

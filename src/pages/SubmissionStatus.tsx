@@ -3,7 +3,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Clock, XCircle, Edit, Sparkles } from 'lucide-react';
-import { pastorUploads } from '@/lib/mock-data';
+import { pastorUploads as mockUploads } from '@/lib/mock-data';
+import { uploadService } from '@/services/upload-service';
+import { useApiData } from '@/hooks/use-api-data';
 
 const statusConfig = {
   pending: { icon: Clock, color: 'bg-amber-500/10 text-amber-700 border-amber-500/20', label: 'Pending' },
@@ -12,6 +14,16 @@ const statusConfig = {
 };
 
 export default function SubmissionStatus() {
+  // GET /uploads — the signed-in creator's submissions from D1.
+  const { data: pastorUploads } = useApiData(
+    async () => {
+      const items = await uploadService.getMyUploads();
+      return items.length ? items : mockUploads;
+    },
+    mockUploads as any[],
+    [],
+  );
+
   return (
     <div className="space-y-6 max-w-[800px] mx-auto">
       <div>
@@ -20,7 +32,7 @@ export default function SubmissionStatus() {
       </div>
 
       <div className="space-y-3">
-        {pastorUploads.map(upload => {
+        {(pastorUploads as any[]).map(upload => {
           const status = statusConfig[upload.status];
           const Icon = status.icon;
           return (

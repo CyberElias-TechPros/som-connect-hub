@@ -57,7 +57,7 @@ const mockUsers: Record<string, { password: string; user: User }> = {
 function persistUser(user: User, token: string) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    localStorage.setItem(TOKEN_KEY, token);
+    if (token) apiClient.setToken(token);
   } catch {}
 }
 
@@ -115,6 +115,7 @@ export async function login(email: string, password: string): Promise<{ user: Us
     };
     currentToken = data.token;
     currentUserState = apiUser;
+    apiClient.setToken(data.token);
     persistUser(apiUser, data.token);
     return { user: apiUser, token: data.token };
   }, async () => {
@@ -169,6 +170,7 @@ export async function register(email: string, password: string, name: string, ro
     };
     currentToken = data.token;
     currentUserState = apiUser;
+    apiClient.setToken(data.token);
     persistUser(apiUser, data.token);
     return { user: apiUser, token: data.token };
   }, async () => {
@@ -207,6 +209,9 @@ export function logout(): void {
   currentToken = null;
   currentUserState = null;
   clearPersisted();
+  apiClient.clearToken();
+  // Best effort server-side audit; the token itself is stateless.
+  apiClient.post('/auth/logout', {}).catch(() => {});
 }
 
 export function getCurrentUser(): User | null {
@@ -247,18 +252,57 @@ export function hasPermission(permission: string): boolean {
 }
 
 // Additional helpers for happy paths
-export async function requestPasswordReset(email: string): Promise<void> {
+export async function requestPasswordReset(email: string): Promise<{ message: string; resetToken?: string }> {
   return apiClient.tryApi(async () => {
-    await apiClient.post('/auth/forgot', { email });
+    return apiClient.post<{ message: string; resetToken?: string }>('/auth/forgot', { email }, { anonymous: true });
   }, async () => {
     await new Promise(r => setTimeout(r, 800));
-    return;
+    return { message: 'If an account exists for that email, a reset link is on its way.' };
   });
+}
+
+/** Completes a password reset (and signs the user back in on success). */
+export async function resetPassword(email: string, password: string, token?: string): Promise<{ user: User; token: string }> {
+  return apiClient.tryApi(async () => {
+    const data = await apiClient.post<{ user: any; token: string }>('/auth/reset', { email, password, token }, { anonymous: true });
+    const user: User = {
+      id: data.user.id,
+      name: data.user.name,
+      email: data.user.email,
+      avatar: data.user.avatar,
+      role: data.user.role,
+      joinedDate: data.user.joinedDate || new Date().toISOString().split('T')[0],
+      streak: data.user.streak || 0,
+      bio: data.user.bio,
+      affiliation: data.user.affiliation,
+    };
+    currentToken = data.token;
+    currentUserState = user;
+    persistUser(user, data.token);
+    return { user, token: data.token };
+  }, async () => {
+    const { user, token } = await login(email, password);
+    return { user, token };
+  });
+}
+
+/** Demo accounts shown on the sign-in screen. */
+export async function getDemoAccounts(): Promise<Array<{ email: string; name: string; role: UserRole; demoPassword: string; avatar?: string }>> {
+  return apiClient.tryApi(
+    async () => (await apiClient.get<{ items: any[] }>('/auth/demo-accounts', { anonymous: true })).items,
+    () => [
+      { email: 'david.emmanuel@example.com', name: 'David Emmanuel', role: 'member' as UserRole, demoPassword: 'password123' },
+      { email: 'pastor@example.com', name: 'Pastor Michael', role: 'pastor' as UserRole, demoPassword: 'pastor123' },
+      { email: 'admin@example.com', name: 'Admin User', role: 'admin' as UserRole, demoPassword: 'admin123' },
+    ],
+    { label: 'demo accounts' },
+  );
 }
 
 export async function updateProfile(updates: Partial<User>): Promise<User> {
   return apiClient.tryApi(async () => {
-    const data = await apiClient.put<any>('/auth/profile', updates);
+    const response = await apiClient.put<any>('/auth/profile', updates);
+    const data = response?.user ?? response;
     const updated: User = {
       id: data.id,
       name: data.name,
@@ -286,7 +330,8 @@ export async function updateProfile(updates: Partial<User>): Promise<User> {
 
 export async function fetchMe(): Promise<User | null> {
   return apiClient.tryApi(async () => {
-    const data = await apiClient.get<any>('/auth/me');
+    const response = await apiClient.get<any>('/auth/me');
+    const data = response?.user ?? response;
     const user: User = {
       id: data.id,
       name: data.name,

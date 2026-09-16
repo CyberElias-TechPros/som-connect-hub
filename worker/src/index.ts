@@ -1,8 +1,26 @@
+/**
+ * SOM CONNECT — Cloudflare Workers API entrypoint
+ *
+ * Bindings: D1 (DB), R2 (STORAGE), KV (CACHE), Queues (QUEUE),
+ * Durable Objects (QA_SESSION), Cron triggers and optional static assets.
+ *
+ * The whole API is mounted twice: at the root (`/content`) and under `/api`
+ * (`/api/content`). The frontend talks to `/api/...` through the Vite dev
+ * proxy or the Cloudflare Pages route, while health checks and legacy clients
+ * can keep using the root paths.
+ */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { Env, jsonResponse } from './lib/db';
-import { authMiddleware } from './routes/auth';
+import { prettyJSON } from 'hono/pretty-json';
+import { Env, ensureDatabase } from './lib/db';
+import { corsConfig, errorResponse, jsonResponse, ok, securityHeaders } from './lib/http';
+import { resolveAuth, type AppEnv } from './lib/middleware';
+import { createNotification } from './lib/daily';
+import { sendEmail, templates, appBaseUrl } from './lib/email';
+import { processDueRenewals } from './lib/billing';
+import { QASessionDurableObject } from './durable/qa';
+
 import authRoutes from './routes/auth';
 import contentRoutes from './routes/content';
 import favoritesRoutes from './routes/favorites';
@@ -10,216 +28,265 @@ import playlistsRoutes from './routes/playlists';
 import communityRoutes from './routes/community';
 import qaRoutes from './routes/qa';
 import toolsRoutes from './routes/tools';
-import subsRoutes from './routes/subscriptions';
+import subscriptionsRoutes from './routes/subscriptions';
+import paymentsRoutes from './routes/payments';
 import notificationsRoutes from './routes/notifications';
 import adminRoutes from './routes/admin';
 import uploadsRoutes from './routes/uploads';
-import { QASessionDurableObject } from './durable/qa';
+import metaRoutes from './routes/meta';
 
-type Bindings = Env;
+/* ------------------------------------------------------------------ *
+ * API application
+ * ------------------------------------------------------------------ */
+export const api = new Hono<AppEnv>();
 
-const app = new Hono<{ Bindings: Bindings; Variables: { user?: any } }>();
+api.use('*', logger());
+api.use('*', securityHeaders());
+api.use('*', prettyJSON());
+api.use('*', (c, next) => cors(corsConfig(c.env))(c, next));
 
-// Global middleware
-app.use('*', logger());
-app.use('*', cors({
-  origin: (origin, c) => {
-    const allowed = [
-      c.env.FRONTEND_URL,
-      'http://localhost:8080',
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'https://som-connect-hub.vercel.app',
-    ];
-    // Allow all for demo / Arena preview
-    return origin || '*';
-  },
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+// Request id + token resolution + database self-healing.
+api.use('*', resolveAuth);
 
-// Auth middleware for all routes (sets user if token present)
-app.use('*', authMiddleware);
-
-// Health check
-app.get('/', (c) => {
-  return jsonResponse({
-    name: 'SOM CONNECT API',
-    version: '1.0.0',
+// Root + health
+api.get('/', (c) =>
+  ok({
+    name: c.env.APP_NAME ?? 'SOM CONNECT API',
+    version: c.env.APP_VERSION ?? '1.0.0',
     status: 'operational',
-    env: c.env.ENV,
+    environment: c.env.ENV ?? 'development',
     timestamp: new Date().toISOString(),
-    endpoints: [
-      '/auth/login',
-      '/auth/register',
-      '/auth/me',
-      '/content',
-      '/favorites',
-      '/playlists',
-      '/community/posts',
-      '/community/groups',
-      '/qa',
-      '/tools/confessions',
-      '/tools/ror',
-      '/subscriptions/plans',
-      '/notifications',
-      '/admin/stats',
-      '/uploads',
-    ],
-  });
-});
+    docs: '/api/meta',
+    endpoints: {
+      auth: ['/auth/register', '/auth/login', '/auth/forgot', '/auth/reset', '/auth/me', '/auth/profile'],
+      content: ['/content', '/content/featured', '/content/:id', '/content/:id/progress', '/content/user/continue'],
+      library: ['/favorites', '/playlists', '/notifications'],
+      community: ['/community/posts', '/community/groups', '/qa', '/qa/:id/questions'],
+      daily: ['/tools/bundle', '/tools/confessions', '/tools/ror', '/tools/complete', '/tools/streak'],
+      commerce: ['/subscriptions/plans', '/subscriptions/me', '/payments/methods', '/payments/billing'],
+      admin: ['/admin/stats', '/admin/users', '/admin/uploads', '/admin/moderation/posts'],
+      media: ['/uploads', '/uploads/file/:key'],
+    },
+  }),
+);
 
-app.get('/health', (c) => jsonResponse({ status: 'ok', timestamp: new Date().toISOString() }));
+// Meta routes (health, meta, speakers, search, stats) sit at the API root.
+api.route('/', metaRoutes);
 
-// Routes
-app.route('/auth', authRoutes);
-app.route('/content', contentRoutes);
-app.route('/favorites', favoritesRoutes);
-app.route('/playlists', playlistsRoutes);
-app.route('/community', communityRoutes);
-app.route('/qa', qaRoutes);
-app.route('/tools', toolsRoutes);
-app.route('/subscriptions', subsRoutes);
-app.route('/notifications', notificationsRoutes);
-app.route('/admin', adminRoutes);
-app.route('/uploads', uploadsRoutes);
+// Feature routes
+api.route('/auth', authRoutes);
+api.route('/content', contentRoutes);
+api.route('/favorites', favoritesRoutes);
+api.route('/playlists', playlistsRoutes);
+api.route('/community', communityRoutes);
+api.route('/qa', qaRoutes);
+api.route('/tools', toolsRoutes);
+api.route('/subscriptions', subscriptionsRoutes);
+api.route('/payments', paymentsRoutes);
+api.route('/notifications', notificationsRoutes);
+api.route('/uploads', uploadsRoutes);
+api.route('/admin', adminRoutes);
 
-// Additional utility routes
+/* ------------------------------------------------------------------ *
+ * Root application — serves /api/* plus the unprefixed routes
+ * ------------------------------------------------------------------ */
+const app = new Hono<AppEnv>();
 
-// GET /speakers
-app.get('/speakers', async (c) => {
-  const result = await c.env.DB.prepare('SELECT * FROM speakers').all();
-  return jsonResponse({ items: result.results || [] });
-});
+app.route('/api', api);
+app.route('/', api);
 
-// GET /search — global search
-app.get('/search', async (c) => {
-  const q = c.req.query('q');
-  if (!q) return jsonResponse({ items: [] });
-  const like = `%${q}%`;
-  const result = await c.env.DB.prepare(`
-    SELECT c.*, s.name as speaker_name, s.avatar as speaker_avatar
-    FROM content_items c
-    JOIN speakers s ON c.speaker_id = s.id
-    WHERE c.title LIKE ? OR c.description LIKE ? OR c.tags LIKE ? OR s.name LIKE ?
-    ORDER BY c.views DESC
-    LIMIT 20
-  `).bind(like, like, like, like).all();
-
-  const items = (result.results || []).map((row: any) => ({
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    thumbnail: row.thumbnail,
-    duration: row.duration,
-    speaker: { name: row.speaker_name, avatar: row.speaker_avatar },
-    category: row.category,
-    tags: row.tags ? JSON.parse(row.tags) : [],
-    views: row.views,
-    isPremium: !!row.is_premium,
-  }));
-
-  return jsonResponse({ items, query: q });
-});
-
-// 404
 app.notFound((c) => {
-  return jsonResponse({ error: 'Not found', path: c.req.path }, 404);
+  if (c.req.path.startsWith('/api')) {
+    return errorResponse(`No API route matches ${c.req.path}.`, 404, 'route_not_found');
+  }
+  // Anything outside /api is handled by static assets when configured.
+  return errorResponse('Not found.', 404);
 });
 
-// Error handler
-app.onError((err, c) => {
-  console.error('API Error:', err);
-  return jsonResponse({ error: err.message || 'Internal server error' }, 500);
+app.onError((error, c) => {
+  console.error('[api:error]', error?.stack ?? error);
+  const message =
+    c.env.ENV === 'production' ? 'Something went wrong on our side. Please try again.' : error?.message ?? 'Internal server error';
+  return errorResponse(message, 500, 'internal_error');
 });
 
-// Queue consumer — background jobs
-export async function queue(batch: MessageBatch, env: Env) {
+/* ------------------------------------------------------------------ *
+ * Queue consumer — background jobs
+ * ------------------------------------------------------------------ */
+async function handleQueue(batch: MessageBatch<any>, env: Env): Promise<void> {
   for (const message of batch.messages) {
-    const payload = message.body as any;
-    console.log('Queue job:', payload);
-
+    const payload = message.body ?? {};
     try {
-      if (payload.type === 'welcome') {
-        // Create welcome notification
-        const id = `notif_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-        await env.DB.prepare(
-          'INSERT INTO notifications (id, user_id, type, title, message, action_url) VALUES (?, ?, ?, ?, ?, ?)'
-        ).bind(id, payload.userId, 'system', 'Welcome to SOM CONNECT!', 'Your journey begins now. Explore teachings, daily tools, and community.', '/').run();
-      }
-
-      if (payload.type === 'new_content') {
-        // Notify all users about new content (in prod, fan-out)
-        const users = await env.DB.prepare('SELECT id FROM users LIMIT 100').all();
-        for (const u of users.results || []) {
-          const nid = `notif_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-          try {
-            await env.DB.prepare(
-              'INSERT INTO notifications (id, user_id, type, title, message, action_url) VALUES (?, ?, ?, ?, ?, ?)'
-            ).bind(nid, (u as any).id, 'content', 'New Content Available', `New teaching "${payload.title}" is now available.`, `/library/${payload.contentId}`).run();
-          } catch {}
+      switch (payload.type) {
+        case 'welcome': {
+          await createNotification(
+            env,
+            payload.userId,
+            'system',
+            'Welcome to SOM CONNECT!',
+            'Your journey begins now. Explore teachings, daily tools and community.',
+            '/',
+          );
+          if (payload.email) {
+            await sendEmail(env, { to: payload.email, ...templates.welcome(payload.name ?? 'friend') });
+          }
+          break;
         }
-      }
 
-      if (payload.type === 'new_post') {
-        // Could notify group members
-      }
+        case 'new_content': {
+          const users = await env.DB.prepare('SELECT id FROM users WHERE is_active = 1 LIMIT 200').all<any>();
+          for (const user of users.results ?? []) {
+            await createNotification(
+              env,
+              (user as any).id,
+              'content',
+              'New teaching available',
+              `"${payload.title ?? 'New content'}" has just been published.`,
+              payload.contentId ? `/library/${payload.contentId}` : '/library',
+            ).catch(() => undefined);
+          }
+          break;
+        }
 
-      if (payload.type === 'new_question') {
-        // Could notify speaker
-      }
+        case 'new_post':
+        case 'new_question': {
+          // Fan-out is handled inline by the routes; nothing else to do.
+          break;
+        }
 
-      if (payload.type === 'subscription_created') {
-        const nid = `notif_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-        await env.DB.prepare(
-          'INSERT INTO notifications (id, user_id, type, title, message, action_url) VALUES (?, ?, ?, ?, ?, ?)'
-        ).bind(nid, payload.userId, 'system', 'Premium Activated!', 'Your premium subscription is now active. Enjoy HD streaming, offline downloads, and exclusive content.', '/profile').run();
-      }
+        case 'subscription_created': {
+          // The billing engine already wrote the in-app notification + receipt;
+          // this keeps the queue path honest for older messages.
+          const already = await env.DB.prepare(
+            "SELECT id FROM notifications WHERE user_id = ? AND title = 'Premium activated' ORDER BY created_at DESC LIMIT 1",
+          )
+            .bind(payload.userId)
+            .first<{ id: string }>();
+          if (!already) {
+            await createNotification(
+              env,
+              payload.userId,
+              'system',
+              'Premium activated',
+              'Your subscription is active. Enjoy HD streaming, offline downloads and exclusive content.',
+              '/manage-subscription',
+            );
+          }
+          break;
+        }
 
-      if (payload.type === 'password_reset') {
-        // In prod, send email via Resend/SendGrid
-        console.log(`Password reset email would be sent to ${payload.email}`);
-      }
+        case 'upload_reviewed': {
+          if (payload.email) {
+            await sendEmail(env, {
+              to: payload.email,
+              ...templates.uploadReviewed(payload.name ?? 'friend', payload.title ?? 'your upload', !!payload.approved, payload.feedback ?? ''),
+            });
+          }
+          break;
+        }
 
+        case 'password_reset': {
+          // Delivered through lib/email: Resend when configured, otherwise the
+          // KV-backed outbox so the flow is still end-to-end testable.
+          const link = `${appBaseUrl(env)}/forgot-password?token=${encodeURIComponent(payload.token ?? '')}&email=${encodeURIComponent(payload.email ?? '')}`;
+          await sendEmail(env, {
+            to: payload.email,
+            ...templates.passwordReset(payload.name ?? 'friend', payload.token ?? '', link),
+          });
+          break;
+        }
+
+        default:
+          console.log('[queue] unhandled job', payload);
+      }
       message.ack();
-    } catch (e) {
-      console.error('Queue job failed:', e);
+    } catch (error) {
+      console.error('[queue] job failed', payload?.type, error);
       message.retry();
     }
   }
 }
 
-// Cron — daily tasks
-export async function scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-  console.log('Cron triggered:', event.cron);
+/* ------------------------------------------------------------------ *
+ * Cron — daily housekeeping
+ * ------------------------------------------------------------------ */
+async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+  ctx.waitUntil(
+    (async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      console.log(`[cron] ${event.cron} (${today})`);
 
-  // Daily: reset streaks? Actually streak should persist, but we can create daily confessions if missing
-  // For demo, ensure today's confession exists
-  const today = new Date().toISOString().split('T')[0];
-  const existing = await env.DB.prepare('SELECT id FROM daily_confessions WHERE date = ?').bind(today).first();
-  if (!existing) {
-    // In prod, generate from template
-    console.log(`No confession for ${today}, would generate`);
-  }
+      // 1. Make sure today's devotionals exist (deterministic per date).
+      const { ensureConfessionForDate, ensureRorForDate } = await import('./lib/daily');
+      await ensureConfessionForDate(env, today).catch((error) => console.error('[cron] confession', error));
+      await ensureRorForDate(env, today).catch((error) => console.error('[cron] ror', error));
 
-  // Clean old notifications (older than 30 days)
-  try {
-    await env.DB.prepare("DELETE FROM notifications WHERE created_at < datetime('now', '-30 days')").run();
-  } catch {}
+      // 2. Billing: renew what is due, retry dunning, expire cancellations.
+      //    Errors here must never stop the rest of the run.
+      await processDueRenewals(env)
+        .then((summary) => console.log('[cron] billing', JSON.stringify(summary)))
+        .catch((error) => console.error('[cron] billing', error));
 
-  // Update cache stats
-  try {
-    const stats = await env.DB.prepare('SELECT COUNT(*) as users, SUM(views) as views FROM users, content_items').first() as any;
-    await env.CACHE.put('stats:daily', JSON.stringify(stats), { expirationTtl: 86400 });
-  } catch {}
+      await env.DB.prepare(
+        `UPDATE user_subscriptions SET status = 'expired', updated_at = ?
+         WHERE status = 'active' AND cancel_at_period_end = 1 AND current_period_end < ?`,
+      )
+        .bind(new Date().toISOString(), new Date().toISOString())
+        .run()
+        .catch((error) => console.error('[cron] expire subscriptions', error));
+
+      // 3. Daily reminder notifications for members who enabled them.
+      try {
+        const users = await env.DB.prepare(
+          `SELECT id, name FROM users WHERE is_active = 1 AND (preferences IS NULL OR preferences NOT LIKE '%"dailyReminders":false%') LIMIT 500`,
+        ).all<any>();
+        for (const user of users.results ?? []) {
+          await createNotification(
+            env,
+            (user as any).id,
+            'system',
+            "Today's devotional is ready",
+            'Your daily confession and Rhapsody reading are waiting for you.',
+            '/tools',
+          ).catch(() => undefined);
+        }
+      } catch (error) {
+        console.error('[cron] reminders', error);
+      }
+
+      // 4. Housekeeping: old notifications + expired reset tokens.
+      await env.DB.prepare("DELETE FROM notifications WHERE created_at < datetime('now', '-60 days')").run().catch(() => undefined);
+      await env.DB.prepare("DELETE FROM password_resets WHERE expires_at < datetime('now', '-7 days')").run().catch(() => undefined);
+
+      // 5. Warm the KV cache for the shell.
+      try {
+        const stats = await env.DB.prepare(
+          'SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM content_items) AS content, (SELECT COALESCE(SUM(views),0) FROM content_items) AS views',
+        ).first();
+        await env.CACHE.put('stats:daily', JSON.stringify(stats), { expirationTtl: 86_400 });
+      } catch (error) {
+        console.error('[cron] cache warmup', error);
+      }
+    })(),
+  );
 }
 
+/* ------------------------------------------------------------------ *
+ * Exports
+ * ------------------------------------------------------------------ */
 export default {
-  fetch: app.fetch,
-  queue,
-  scheduled,
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // Warm the database once per isolate before serving.
+    ctx.waitUntil(ensureDatabase(env));
+    try {
+      return await app.fetch(request, env, ctx);
+    } catch (error: any) {
+      console.error('[worker] unhandled', error?.stack ?? error);
+      return jsonResponse({ ok: false, error: 'Service temporarily unavailable.', code: 'worker_error' }, 500);
+    }
+  },
+  queue: handleQueue,
+  scheduled: handleScheduled,
 };
 
-// Export Durable Object
 export { QASessionDurableObject };

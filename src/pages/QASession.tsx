@@ -1,30 +1,84 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ArrowLeft, ThumbsUp, Send, Play, Sparkles } from 'lucide-react';
-import { qaSessions, sampleQuestions } from '@/lib/mock-data';
+import { qaSessions as mockSessions, sampleQuestions } from '@/lib/mock-data';
+import { qaService } from '@/services/qa-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 
 export default function QASession() {
   const { id } = useParams();
-  const session = qaSessions.find(s=>s.id===id) || qaSessions[0];
-  const [questions, setQuestions] = useState(sampleQuestions);
+  const [live, setLive] = useState<{ participants: number; questions: number; realtime: boolean }>({ participants: 0, questions: 0, realtime: false });
+
+  // Session detail + questions from the Worker, seeded with the demo set.
+  const { data: detail, refresh } = useApiData(
+    async () => {
+      if (!id) return null;
+      return qaService.getById(id);
+    },
+    null as Awaited<ReturnType<typeof qaService.getById>>,
+    [id],
+  );
+
+  const session = detail?.session ?? (mockSessions.find(s=>s.id===id) || mockSessions[0]);
+  const [questions, setQuestions] = useState(detail?.questions ?? sampleQuestions);
   const [newQ, setNewQ] = useState('');
+
+  useEffect(() => {
+    if (detail?.questions?.length) setQuestions(detail.questions as any);
+  }, [detail]);
+
+  // Join the live channel (Durable Object) and keep counters fresh.
+  useEffect(() => {
+    if (!session?.id) return;
+    qaService.joinSession(session.id).then((result) => {
+      if (typeof result?.participants === 'number') setLive(prev => ({ ...prev, participants: result.participants! }));
+    }).catch(() => undefined);
+
+    const stop = qaService.connectLive(session.id, {
+      onEvent: (event, data) => {
+        if (event === 'presence' && typeof data?.participants === 'number') {
+          setLive(prev => ({ ...prev, participants: data.participants, realtime: true }));
+        }
+        if (event === 'question' && data?.text) {
+          setQuestions(prev => [{ id: data.id, text: data.text, askedBy: data.askedBy, upvotes: 0, isAnswered: false } as any, ...prev]);
+        }
+      },
+    });
+
+    const poll = setInterval(() => {
+      qaService.getLive(session.id).then(setLive).catch(() => undefined);
+    }, 20000);
+
+    return () => { stop(); clearInterval(poll); qaService.leaveSession(session.id).catch(() => undefined); };
+  }, [session?.id]);
   const { toast } = useToast();
 
-  const ask = (e: React.FormEvent) => {
+  const ask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newQ.trim()) return;
-    setQuestions([{ id: Date.now().toString(), text: newQ, askedBy: 'You', upvotes: 0, isAnswered: false }, ...questions]);
+    const text = newQ;
+    setQuestions([{ id: `local-${Date.now()}`, text, askedBy: 'You', upvotes: 0, isAnswered: false }, ...questions]);
     setNewQ('');
-    toast({ title: 'Question submitted', description: 'Your question is now visible to the speaker.' });
+    try {
+      // POST /qa/:id/questions — broadcasts to the room (Durable Object).
+      await qaService.askQuestion(session.id, text);
+      refresh();
+      toast({ title: 'Question submitted', description: 'Your question is now visible to the speaker.' });
+    } catch (error: any) {
+      toast({ title: 'Question saved', description: 'It will appear to the room once you are back online.' });
+    }
   };
 
-  const upvote = (qid: string) => setQuestions(qs=>qs.map(q=>q.id===qid ? { ...q, upvotes: q.upvotes+1 } : q));
+  const upvote = async (qid: string) => {
+    setQuestions(qs => qs.map(q => q.id === qid ? { ...q, upvotes: q.upvotes + 1 } : q));
+    await qaService.upvoteQuestion(session.id, qid).catch(() => undefined);
+  };
 
   return (
     <div className="space-y-6 max-w-[900px] mx-auto">

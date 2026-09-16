@@ -6,12 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Mail, AlertCircle, ArrowLeft, CheckCircle, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import somLogo from '@/images/som-logo.png';
+import { requestPasswordReset, resetPassword } from '@/services/auth-service';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [resetToken, setResetToken] = useState<string | undefined>();
+  const [newPassword, setNewPassword] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,9 +22,16 @@ export default function ForgotPassword() {
     if (!email.trim()) { setError('Email required'); return; }
     if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) { setError('Invalid email'); return; }
     setLoading(true);
-    await new Promise(r=>setTimeout(r, 900));
-    setSuccess(true);
-    setLoading(false);
+    try {
+      // POST /auth/forgot — always answers 200 so accounts can't be enumerated.
+      const result = await requestPasswordReset(email.trim().toLowerCase());
+      setResetToken(result?.resetToken);
+      setSuccess(true);
+    } catch (caught: any) {
+      setError(caught?.message ?? 'We could not send that email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,8 +50,31 @@ export default function ForgotPassword() {
             <div className="rounded-[1.5rem] border border-border/50 bg-card p-7 text-center space-y-4">
               <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center"><CheckCircle className="w-7 h-7 text-emerald-600" /></div>
               <h1 className="font-display text-[1.8rem] leading-[0.9]">Check your email</h1>
-              <p className="text-[14px] leading-[1.5] text-muted-foreground">We sent a reset link to <span className="font-[600] text-foreground">{email}</span>. It expires in 15 minutes. Happy path — you can also just sign in with any password.</p>
-              <Button className="w-full rounded-full bg-foreground text-background h-11 font-[600]" onClick={()=>navigate('/login')}>Back to login</Button>
+              <p className="text-[14px] leading-[1.5] text-muted-foreground">We sent a reset link to <span className="font-[600] text-foreground">{email}</span>. It expires in 15 minutes.</p>
+
+              {resetToken && (
+                <div className="space-y-3 text-left rounded-[1rem] border border-border/60 bg-secondary/30 p-4">
+                  <Label className="font-[600] text-[13px]">Set a new password</Label>
+                  <Input
+                    type="password"
+                    placeholder="New password"
+                    value={newPassword}
+                    onChange={(e) => { setNewPassword(e.target.value); setError(''); }}
+                    className="h-11 rounded-full bg-background"
+                  />
+                  <Button className="w-full rounded-full bg-foreground text-background h-11 font-[600]" disabled={newPassword.length < 3} onClick={async () => {
+                    try {
+                      await resetPassword(email.trim().toLowerCase(), newPassword, resetToken);
+                      navigate('/');
+                    } catch (caught: any) {
+                      setError(caught?.message ?? 'Could not reset the password.');
+                    }
+                  }}>Save password & sign in</Button>
+                  {error && <p className="text-[12px] text-destructive">{error}</p>}
+                </div>
+              )}
+
+              <Button variant="outline" className="w-full rounded-full h-11 font-[600]" onClick={()=>navigate('/login')}>Back to login</Button>
             </div>
           ) : (
             <>

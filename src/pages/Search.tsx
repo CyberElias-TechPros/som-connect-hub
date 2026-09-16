@@ -6,20 +6,36 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search as SearchIcon, Play, Clock, Sparkles, ArrowRight } from 'lucide-react';
 import { featuredContent, conferences, podcasts, originals } from '@/lib/mock-data';
+import { contentService } from '@/services/content-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { motion } from 'framer-motion';
 
-const allContent = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
+const mockLibrary = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
 
 export default function Search() {
   const [params, setParams] = useSearchParams();
   const initialQ = params.get('q') || '';
   const [q, setQ] = useState(initialQ);
 
-  const results = useMemo(() => {
-    if (!q.trim()) return allContent.slice(0, 9);
+  // Instant local results (works offline / before the API answers)…
+  const localResults = useMemo(() => {
+    if (!q.trim()) return mockLibrary.slice(0, 9);
     const low = q.toLowerCase();
-    return allContent.filter(c => c.title.toLowerCase().includes(low) || c.speaker.name.toLowerCase().includes(low) || c.tags.some(t=>t.toLowerCase().includes(low)) || c.category.toLowerCase().includes(low));
+    return mockLibrary.filter(c => c.title.toLowerCase().includes(low) || c.speaker.name.toLowerCase().includes(low) || c.tags.some(t=>t.toLowerCase().includes(low)) || c.category.toLowerCase().includes(low));
   }, [q]);
+
+  // …then the server-side search from the Worker replaces them.
+  const { data: remoteResults } = useApiData(
+    async () => {
+      if (!q.trim()) return [] as typeof mockLibrary;
+      const items = await contentService.search(q);
+      return items as typeof mockLibrary;
+    },
+    [] as typeof mockLibrary,
+    [q],
+  );
+
+  const results = remoteResults.length ? remoteResults : localResults;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

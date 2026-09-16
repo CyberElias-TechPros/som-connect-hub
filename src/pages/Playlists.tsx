@@ -1,26 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Play, Plus, List, Search, Sparkles, MoreHorizontal } from 'lucide-react';
 import { playlists as mockPlaylists } from '@/lib/mock-data';
+import { playlistService } from '@/services/playlist-service';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
 export default function Playlists() {
-  const [playlists, setPlaylists] = useState(mockPlaylists);
+  const [playlists, setPlaylists] = useState<any[]>(() => {
+    const local = playlistService.getUserPlaylists();
+    return local.length ? local : mockPlaylists;
+  });
   const [q, setQ] = useState('');
+
+  // Merge the server-side playlists (D1) on mount.
+  useEffect(() => {
+    playlistService.sync().then((items) => {
+      if (items.length) setPlaylists(items as any[]);
+    }).catch(() => undefined);
+  }, []);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [open, setOpen] = useState(false);
 
   const filtered = playlists.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
 
-  const create = () => {
+  const create = async () => {
     if (!newName.trim()) return;
-    const pl = {
+    const local = playlistService.createPlaylist(newName, newDesc || 'Curated collection', false);
+    const pl = local ?? {
       id: Date.now().toString(),
       name: newName,
       description: newDesc || 'Curated collection',
@@ -29,8 +41,9 @@ export default function Playlists() {
       createdDate: new Date().toISOString().split('T')[0],
       isPublic: false,
     };
-    setPlaylists([pl, ...playlists]);
+    setPlaylists([pl as any, ...playlists]);
     setNewName(''); setNewDesc(''); setOpen(false);
+    playlistService.sync().then((items) => { if (items.length) setPlaylists(items as any[]); }).catch(() => undefined);
   };
 
   return (

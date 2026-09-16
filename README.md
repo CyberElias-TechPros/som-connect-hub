@@ -227,32 +227,38 @@ Without `VITE_API_URL`, frontend works fully offline via mocks.
 3. Env: `VITE_API_URL=https://som-connect-api.your-subdomain.workers.dev`
 
 ### Backend → Cloudflare Workers
+
+Everything is scripted, in dependency order (see
+**[docs/PROCESSES.md](docs/PROCESSES.md)** for the full runbook):
+
 ```bash
 cd worker
-# D1 prod
-npx wrangler d1 create som-connect-db-prod
-npx wrangler d1 execute som-connect-db-prod --file=src/db/schema.sql
-npx wrangler d1 execute som-connect-db-prod --file=src/db/seed.sql
-
-# R2
-npx wrangler r2 bucket create som-connect-storage
-
-# KV
-npx wrangler kv:namespace create CACHE
-npx wrangler kv:namespace create CACHE --preview
-
-# Queue
-npx wrangler queues create som-connect-queue
-
-# Secrets
-npx wrangler secret put JWT_SECRET
-npx wrangler secret put FRONTEND_URL # https://your-vercel.app
-
-# Deploy
-npm run deploy
+npm run provision:check       # 1. verifies auth + config, changes nothing
+npm run provision:staging     # 2. D1 → wrangler.toml ids → R2 → KV → Queues+DLQ
+                              #    → remote migrations + seed → secrets
+npm run preflight             # 3. deploy gate: placeholders, bindings, SQL freshness
+npm run db:migrate:remote     # 4. schema before code
+npm run deploy:staging        # 5. ship it  (deploy:prod for production)
 ```
 
-See `worker/README.md` for full details.
+The individual steps `provision.mjs` performs, if you prefer them manual:
+
+```bash
+npx wrangler d1 create som-connect-db          # then paste the id into wrangler.toml
+npx wrangler d1 migrations apply som-connect-db --remote
+npx wrangler r2 bucket create som-connect-storage
+npx wrangler kv:namespace create CACHE && npx wrangler kv:namespace create CACHE --preview
+npx wrangler queues create som-connect-jobs && npx wrangler queues create som-connect-jobs-dlq
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put FRONTEND_URL           # https://your-vercel.app
+# optional integrations
+npx wrangler secret put RESEND_API_KEY         # real email (else: KV outbox)
+npx wrangler secret put STRIPE_SECRET_KEY      # real payments (else: mock provider)
+npx wrangler secret put STRIPE_WEBHOOK_SECRET
+npx wrangler secret put PAYMENT_WEBHOOK_SECRET # required in production
+```
+
+See `worker/README.md` for provider-specific details.
 
 ---
 
@@ -290,7 +296,35 @@ See `worker/README.md` for full details.
 - [x] Settings theme toggle persists
 - [x] 404 → home
 
+### Automated verification
+
+Five suites run against a live stack (`cd worker && npm run dev` + `npm run dev` in another
+terminal). Start both, then:
+
+```bash
+node scripts/api-contract.mjs    # 96 checks — every API path the services call
+node scripts/frontend-smoke.mjs  # 43 checks — real services → real Worker journeys
+node scripts/page-smoke.mjs      # 32 checks — every route rendered in jsdom with live D1 data
+node scripts/stories-smoke.mjs   # 61 checks — the user stories in docs/USER_STORIES.md
+cd worker && npm test            # 118 checks — the full worker happy-path journey
+```
+
+| Suite | What it proves |
+| --- | --- |
+| `scripts/api-contract.mjs` | All 96 endpoints referenced by `src/services/*` exist on the Worker (no 5xx, no missing route), signed in as member / pastor / admin. |
+| `scripts/frontend-smoke.mjs` | The real service layer (Vite `ssrLoadModule`) completes auth, content, favorites, playlists, community, Q&A, tools, payments, uploads, admin journeys against D1. |
+| `scripts/page-smoke.mjs` | Every route in `src/App.tsx` renders without tripping the ErrorBoundary **and** shows live D1 rows (not just bundled mock data). |
+| `scripts/stories-smoke.mjs` | Each story in `docs/USER_STORIES.md` (S1–S32) plus its business rules: proration, prorated decline, dunning schedule, webhook idempotency, role guards, ROR back-fill, offline media ranges. |
+| `worker/test/smoke.test.mjs` | The Worker end to end: auth, content, favorites, playlists, community, Q&A, tools, uploads (creator-only), admin, guard rails. |
+
+Options: `--api=http://host:port` (target a non-default Worker), `--verbose`, `--story=S24`
+(story suite), `--only=/library`, `--settle=ms` (page suite).
+
 **Builds:** `npm run build` (frontend) and `npx tsc --noEmit` (worker) pass.
+
+The ordered list of every process — schema, money engine, routes, queues, cron,
+verification, provisioning, deploy and the ops runbook — is in
+**[docs/PROCESSES.md](docs/PROCESSES.md)**.
 
 ---
 

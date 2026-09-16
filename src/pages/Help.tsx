@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Search, MessageCircle, Mail, Sparkles } from 'lucide-react';
+import { Search, MessageCircle, Mail, Sparkles, ArrowUpRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { faqItems } from '@/lib/mock-data';
 import { motion } from 'framer-motion';
 
@@ -23,8 +25,20 @@ export default function Help() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-3">
-        <Card className="rounded-[1.25rem] border-border/50 bg-card p-5 flex gap-3"><div className="w-10 h-10 rounded-full bg-secondary border border-border/50 flex items-center justify-center"><MessageCircle className="w-5 h-5" /></div><div><div className="font-[650] text-[14px]">Chat support</div><div className="text-[12px] text-muted-foreground">Avg reply 2 min • Demo always online</div></div></Card>
-        <Card className="rounded-[1.25rem] border-border/50 bg-card p-5 flex gap-3"><div className="w-10 h-10 rounded-full bg-secondary border border-border/50 flex items-center justify-center"><Mail className="w-5 h-5" /></div><div><div className="font-[650] text-[14px]">Email us</div><div className="text-[12px] text-muted-foreground">support@somconnect.com</div></div></Card>
+        <Link to="/qa" className="group">
+          <Card className="rounded-[1.25rem] border-border/50 bg-card p-5 flex gap-3 hover:border-foreground/10 hover:shadow-[0_8px_24px_hsl(var(--foreground)/0.06)] transition-all">
+            <div className="w-10 h-10 rounded-full bg-secondary border border-border/50 flex items-center justify-center"><MessageCircle className="w-5 h-5" /></div>
+            <div className="flex-1"><div className="font-[650] text-[14px]">Ask in a live Q&amp;A</div><div className="text-[12px] text-muted-foreground">Speakers answer live — join the next session</div></div>
+            <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors mt-1" />
+          </Card>
+        </Link>
+        <a href="mailto:support@somconnect.com?subject=SOM%20CONNECT%20support" className="group">
+          <Card className="rounded-[1.25rem] border-border/50 bg-card p-5 flex gap-3 hover:border-foreground/10 hover:shadow-[0_8px_24px_hsl(var(--foreground)/0.06)] transition-all">
+            <div className="w-10 h-10 rounded-full bg-secondary border border-border/50 flex items-center justify-center"><Mail className="w-5 h-5" /></div>
+            <div className="flex-1"><div className="font-[650] text-[14px]">Email us</div><div className="text-[12px] text-muted-foreground">support@somconnect.com</div></div>
+            <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors mt-1" />
+          </Card>
+        </a>
       </div>
 
       <Card className="rounded-[1.5rem] border-border/50">
@@ -42,7 +56,12 @@ export default function Help() {
         </CardContent>
       </Card>
 
-      {filtered.length===0 && <div className="py-12 text-center text-muted-foreground text-[14px]">No results for "{q}" — try "subscription" or "download".</div>}
+      {filtered.length===0 && (
+        <div className="py-12 text-center space-y-4 rounded-[1.5rem] border border-dashed border-border/60 bg-secondary/20">
+          <p className="text-muted-foreground text-[14px]">No FAQ matches "{q}" — try "subscription" or "download".</p>
+          <Link to="/qa"><Button variant="outline" className="rounded-full font-[600] gap-1">Ask a speaker instead <ArrowUpRight className="w-4 h-4" /></Button></Link>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,19 +7,31 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Heart, Play, Search, Clock, Eye, Sparkles, Filter, ArrowUpRight } from 'lucide-react';
 import { conferences, podcasts, originals, featuredContent, ContentItem } from '@/lib/mock-data';
+import { contentService } from '@/services/content-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const allContent = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
+const mockLibrary = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
 
 export default function Library() {
   const [activeTab, setActiveTab] = useState('all');
+  const [sort, setSort] = useState<'date' | 'views' | 'title'>('date');
+  // Live library from the Worker (falls back to the bundled demo set instantly).
+  const { data: allContent, loading, offline } = useApiData(
+    async () => {
+      const { items } = await contentService.list({ limit: 100, sort });
+      return items.length ? items : mockLibrary;
+    },
+    mockLibrary as ContentItem[],
+    [sort],
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('som_favs')||'[]'); } catch { return []; }
   });
 
   const filtered = useMemo(() => {
-    let base: ContentItem[] = allContent;
+    let base: ContentItem[] = allContent.length ? allContent : mockLibrary;
     if (activeTab === 'conferences') base = conferences;
     else if (activeTab === 'podcasts') base = podcasts;
     else if (activeTab === 'originals') base = originals;
@@ -27,7 +39,7 @@ export default function Library() {
     if (!searchQuery.trim()) return base;
     const q = searchQuery.toLowerCase();
     return base.filter(c=> c.title.toLowerCase().includes(q) || c.speaker.name.toLowerCase().includes(q) || c.tags.some(t=>t.toLowerCase().includes(q)));
-  }, [activeTab, searchQuery, favorites]);
+  }, [activeTab, searchQuery, favorites, allContent]);
 
   const toggleFav = (id: string, e?: React.MouseEvent) => {
     e?.preventDefault(); e?.stopPropagation();

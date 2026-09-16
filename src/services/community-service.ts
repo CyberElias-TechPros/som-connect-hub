@@ -3,7 +3,7 @@ import { CommunityPost, Group } from '@/lib/mock-data';
 
 export const communityService = {
   async getPosts(limit = 20, offset = 0): Promise<CommunityPost[]> {
-    return apiClient.tryApi(async () => {
+    return apiClient.tryApi<CommunityPost[]>(async () => {
       const data = await apiClient.get<{ items: any[] }>(`/community/posts?limit=${limit}&offset=${offset}`);
       return data.items.map((p: any) => ({
         id: p.id,
@@ -13,6 +13,7 @@ export const communityService = {
         likes: p.likes,
         comments: p.comments,
         image: p.image,
+        isLiked: !!p.isLiked,
       }));
     }, async () => {
       const { communityPosts } = await import('@/lib/mock-data');
@@ -53,6 +54,43 @@ export const communityService = {
       const { groups } = await import('@/lib/mock-data');
       return groups;
     });
+  },
+
+  /** GET /community/posts/:id — post plus its comments. */
+  async getPost(postId: string): Promise<{ post: CommunityPost | null; comments: any[] }> {
+    return apiClient.tryApi(
+      async () => {
+        const data = await apiClient.get<{ post: any; comments: any[] }>(`/community/posts/${postId}`);
+        return {
+          post: {
+            id: data.post.id,
+            author: data.post.author,
+            content: data.post.content,
+            timestamp: data.post.timestamp,
+            likes: data.post.likes,
+            comments: data.post.comments,
+            image: data.post.image,
+            isLiked: !!data.post.isLiked,
+          } as CommunityPost,
+          comments: data.comments ?? [],
+        };
+      },
+      () => ({ post: null, comments: [] }),
+      { label: 'post detail' },
+    );
+  },
+
+  /** POST /community/posts/:id/comments */
+  async addComment(postId: string, content: string): Promise<any> {
+    return apiClient.tryApi(
+      async () => (await apiClient.post<{ comment: any }>(`/community/posts/${postId}/comments`, { content })).comment,
+      () => ({ id: `comment_${Date.now()}`, content, timestamp: new Date().toISOString() }),
+      { label: 'add comment' },
+    );
+  },
+
+  async deletePost(postId: string): Promise<void> {
+    await apiClient.delete(`/community/posts/${postId}`);
   },
 
   async joinGroup(groupId: string): Promise<{ joined: boolean }> {

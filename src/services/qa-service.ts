@@ -69,6 +69,45 @@ export const qaService = {
     }, async () => {});
   },
 
+  /** GET /qa/:id/live — participant + question counters. */
+  async getLive(sessionId: string): Promise<{ participants: number; questions: number; realtime: boolean }> {
+    return apiClient.tryApi(
+      async () => apiClient.get<{ participants: number; questions: number; realtime: boolean }>(`/qa/${sessionId}/live`),
+      () => ({ participants: 1, questions: 0, realtime: false }),
+      { label: 'qa live' },
+    );
+  },
+
+  async leaveSession(sessionId: string): Promise<void> {
+    await apiClient.post(`/qa/${sessionId}/leave`, {}, {}).catch(() => undefined);
+  },
+
+  /**
+   * Opens a live WebSocket channel for a session when the backend exposes one.
+   * Returns a disposer; callers can keep polling `/qa/:id/live` as a fallback.
+   */
+  connectLive(sessionId: string, handlers: { onEvent?: (event: string, data: any) => void } = {}): () => void {
+    const base = apiClient.apiUrl;
+    let socket: WebSocket | null = null;
+    try {
+      const url = new URL(`${base}/qa/${sessionId}/ws`, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+      url.protocol = url.protocol.replace('http', 'ws');
+      socket = new WebSocket(url.toString());
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(String(event.data));
+          handlers.onEvent?.(payload.event, payload.data);
+        } catch {
+          /* ignore malformed frames */
+        }
+      };
+      socket.onerror = () => socket?.close();
+    } catch {
+      socket = null;
+    }
+    return () => socket?.close();
+  },
+
   async joinSession(sessionId: string): Promise<{ joined: boolean; participants?: number }> {
     return apiClient.tryApi(async () => {
       const data = await apiClient.post<{ joined: boolean; participants: number }>(`/qa/${sessionId}/join`, {});

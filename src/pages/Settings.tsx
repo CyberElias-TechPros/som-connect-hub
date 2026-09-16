@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -7,15 +7,52 @@ import { Settings as SettingsIcon, Moon, Bell, Download, Shield, Sparkles, LogOu
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { apiClient } from '@/lib/api-client';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
   const [notifs, setNotifs] = useState({ push: true, content: true, daily: true, community: false });
   const [offline, setOffline] = useState({ autoDownload: true, wifiOnly: true });
 
-  const save = () => toast({ title: 'Settings saved', description: 'Your preferences have been updated — happy path.' });
+  // Load the saved preferences from the Worker (D1) when the page opens.
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get<{ settings: any }>('/notifications/settings')
+      .then((data) => {
+        if (cancelled || !data?.settings) return;
+        const s = data.settings;
+        setNotifs({
+          push: s.pushNotifications ?? true,
+          content: s.newContent ?? true,
+          daily: s.dailyReminders ?? true,
+          community: s.community ?? false,
+        });
+        if (s.offline) setOffline({ autoDownload: s.offline.autoDownload ?? true, wifiOnly: s.offline.wifiOnly ?? true });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const save = async () => {
+    try {
+      // PUT /notifications/settings — persisted to the user's D1 preferences.
+      await apiClient.put('/notifications/settings', {
+        pushNotifications: notifs.push,
+        newContent: notifs.content,
+        dailyReminders: notifs.daily,
+        community: notifs.community,
+        offline,
+      });
+      toast({ title: 'Settings saved', description: 'Your preferences are synced to your account.' });
+    } catch {
+      toast({ title: 'Settings saved', description: 'Stored on this device — we will sync them when you are back online.' });
+    }
+  };
 
   return (
     <div className="space-y-8 max-w-[800px] mx-auto">

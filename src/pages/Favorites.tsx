@@ -4,31 +4,51 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Heart, Search, Trash2, Play, Sparkles, ArrowRight } from 'lucide-react';
-import { conferences, podcasts, originals, featuredContent } from '@/lib/mock-data';
+import { conferences, podcasts, originals, featuredContent, ContentItem } from '@/lib/mock-data';
+import { favoritesService } from '@/services/favorites-service';
+import { contentService } from '@/services/content-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { motion } from 'framer-motion';
 
-const allContent = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
+const mockLibrary = [...featuredContent, ...conferences, ...podcasts, ...originals].filter((v,i,a)=>a.findIndex(t=>t.id===v.id)===i);
+const allContent = mockLibrary;
 
 export default function Favorites() {
-  const [favs, setFavs] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('som_favs')||'[]'); } catch { return []; } });
   const [q, setQ] = useState('');
 
+  // Favorites live in D1 (GET /favorites) with a local mirror for offline use.
+  const { data: favs, refresh: refreshFavs } = useApiData(
+    async () => (await favoritesService.sync()).map((f) => f.contentId),
+    favoritesService.getAllFavorites().map((f) => f.contentId),
+    [],
+  );
+
+  // The full library — used to render favorited items that are not in the
+  // bundled demo set.
+  const { data: library } = useApiData(
+    async () => {
+      const { items } = await contentService.list({ limit: 100 });
+      return items.length ? items : (allContent as ContentItem[]);
+    },
+    allContent as ContentItem[],
+    [],
+  );
+
   const items = useMemo(() => {
-    const base = allContent.filter(c=>favs.includes(c.id));
+    const base = library.filter(c=>favs.includes(c.id));
     if (!q.trim()) return base;
     const low = q.toLowerCase();
     return base.filter(c=>c.title.toLowerCase().includes(low) || c.speaker.name.toLowerCase().includes(low));
-  }, [favs, q]);
+  }, [favs, library, q]);
 
   const remove = (id: string) => {
-    const next = favs.filter(f=>f!==id);
-    setFavs(next);
-    localStorage.setItem('som_favs', JSON.stringify(next));
+    favoritesService.removeFromFavorites(id);
+    refreshFavs();
   };
 
   const clearAll = () => {
-    setFavs([]);
-    localStorage.setItem('som_favs', '[]');
+    favoritesService.clearAllFavorites();
+    refreshFavs();
   };
 
   return (

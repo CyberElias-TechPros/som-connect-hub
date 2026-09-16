@@ -4,10 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Check, Sparkles, ArrowRight, Shield, Zap } from 'lucide-react';
-import { subscriptionPlans } from '@/lib/mock-data';
+import { subscriptionPlans as mockPlans } from '@/lib/mock-data';
+import { PaymentService } from '@/services/payment-service';
+import { useApiData } from '@/hooks/use-api-data';
 import { motion } from 'framer-motion';
 
 export default function Subscription() {
+  // Plans + "current plan" badge come from D1.
+  const { data: subscriptionPlans } = useApiData(
+    async () => {
+      const items = await PaymentService.getSubscriptionPlans();
+      return items.length ? items : mockPlans;
+    },
+    mockPlans,
+    [],
+  );
   const navigate = useNavigate();
   return (
     <div className="space-y-8 max-w-[1100px] mx-auto">
